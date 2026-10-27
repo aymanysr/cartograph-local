@@ -161,12 +161,10 @@ function printBlastRadiusReport(graph, focusFile, topN = 10) {
 
 function serveApp(port, payload) {
   const htmlPath = path.resolve(__dirname, '..', 'cartograph.html');
-  const libFiles = new Map([
-    ['/lib/cartograph-parser.js', path.resolve(__dirname, '..', 'lib', 'cartograph-parser.js')],
-    ['/lib/cartograph-agent.js', path.resolve(__dirname, '..', 'lib', 'cartograph-agent.js')],
-    ['/lib/cartograph-evals.js', path.resolve(__dirname, '..', 'lib', 'cartograph-evals.js')],
-    ['/lib/cartograph-fit.js', path.resolve(__dirname, '..', 'lib', 'cartograph-fit.js')],
-  ]);
+  // Classic scripts the app loads from disk. Served dynamically so adding
+  // a lib/app file never requires touching this route again; the pattern
+  // rejects path traversal (no dots or slashes inside the remainder).
+  const scriptPattern = /^\/((?:lib|app)\/[A-Za-z0-9_-]+\.js)$/;
 
   const server = http.createServer((req, res) => {
     const url = req.url.split('?')[0];
@@ -176,9 +174,16 @@ function serveApp(port, payload) {
       res.end(JSON.stringify(payload));
       return;
     }
-    if (libFiles.has(url)) {
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(fs.readFileSync(libFiles.get(url)));
+    const scriptMatch = url.match(scriptPattern);
+    if (scriptMatch) {
+      const fullPath = path.resolve(__dirname, '..', scriptMatch[1]);
+      if (fs.existsSync(fullPath)) {
+        res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(fs.readFileSync(fullPath));
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Not found');
+      }
       return;
     }
     if (url === '/' || url === '/cartograph.html') {

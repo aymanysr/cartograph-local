@@ -506,7 +506,10 @@ test('spec, docs, and UI copy never use the legacy tool spellings', () => {
   assertNoLegacyToolNames(readRepoFile('specs/README.md'), 'specs/README.md');
   assertNoLegacyToolNames(readRepoFile('PROJECT.md'), 'PROJECT.md');
   assertNoLegacyToolNames(readRepoFile('README.md'), 'README.md');
-  assertNoLegacyToolNames(readRepoFile('cartograph.html'), 'cartograph.html');
+  // The split moved UI copy into app/*.js; the scan follows it.
+  for (const [fileLabel, source] of readUiSources()) {
+    assertNoLegacyToolNames(source, fileLabel);
+  }
 });
 
 test('phase-03 spec lists every canonical handler name', () => {
@@ -516,13 +519,30 @@ test('phase-03 spec lists every canonical handler name', () => {
   }
 });
 
+// The app's UI copy lives in cartograph.html's head/markup and the
+// app/cartograph-*.js classic scripts (split out 2026-10-27, verbatim,
+// original order). Contract checks scan all of them so the split never
+// loosens what the tests guarantee.
+function readUiSources() {
+  const files = [
+    'cartograph.html',
+    ...fs.readdirSync(nodePath.join(REPO_ROOT, 'app'))
+      .filter(f => f.endsWith('.js'))
+      .sort()
+      .map(f => `app/${f}`),
+  ];
+  return files.map(f => [f, readRepoFile(f)]);
+}
+
 test('the UI AGENT_TOOLS sample lists every canonical handler name', () => {
-  const html = readRepoFile('cartograph.html');
-  const blockStart = html.indexOf('export const AGENT_TOOLS = [');
-  assert.ok(blockStart !== -1, 'the AGENT_TOOLS sample block exists');
-  const blockEnd = html.indexOf('] as const', blockStart);
-  assert.ok(blockEnd !== -1, 'the AGENT_TOOLS sample block is terminated');
-  const sampleBlock = html.slice(blockStart, blockEnd);
+  const sources = readUiSources();
+  const [fileLabel, source] = sources.find(([, s]) => s.includes('export const AGENT_TOOLS = [')) || [null, ''];
+  assert.ok(source, `the AGENT_TOOLS sample block exists (searched: ${sources.map(([f]) => f).join(', ')})`);
+
+  const blockStart = source.indexOf('export const AGENT_TOOLS = [');
+  const blockEnd = source.indexOf('] as const', blockStart);
+  assert.ok(blockEnd !== -1, `${fileLabel}: the AGENT_TOOLS sample block is terminated`);
+  const sampleBlock = source.slice(blockStart, blockEnd);
 
   for (const name of CANONICAL_TOOL_NAMES) {
     assert.ok(

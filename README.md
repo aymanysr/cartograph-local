@@ -21,8 +21,11 @@ open cartograph.html           # macOS; or double-click the file
 
 1. **Open the app directly**
    Double-click `cartograph.html`, or open it from the repository root. It loads
-   the three shared modules from the `lib/` folder, so keep the repository
-   layout intact.
+   the shared parser/agent/evals/fit modules from `lib/` and the UI code from
+   `app/`, so keep the repository layout intact. `cartograph.html` holds the
+   markup and load order; `app/*.js` are the classic scripts it runs, in order:
+   `preset-repos`, `graph-state`, `canvas-render`, `ui-panels`,
+   `agent-evals`, `app-shell`.
 2. **Load a repository**
    - Click **"Open Local Folder"** in the top bar and choose a project directory
      (the browser's local directory reader; no files leave your machine).
@@ -78,6 +81,13 @@ open cartograph.html           # macOS; or double-click the file
 - **AST** — "abstract syntax tree"; here it is legacy branding only (see the
   architecture note below).
 - **Snapshot** — the JSON file written by the CLI: `{ name, scannedAt, graph }`.
+- **Classic script** — an ordinary `<script src>` file rather than an ES
+  module: it runs in document order and its top-level declarations become
+  browser globals. All `lib/*.js` and `app/*.js` files are classic scripts.
+- **Fit camera** — the framing computed by
+  `CartographFit.computeFitCamera(...)`: one uniform zoom (clamped to
+  `[0.05, 2.6]`) plus a pan that places the whole graph's world box inside the
+  visible canvas, with padding so nodes clear the top bar and legend.
 
 ## Architecture
 
@@ -96,14 +106,21 @@ open cartograph.html           # macOS; or double-click the file
 
 ## Project Structure
 
-- [`cartograph.html`](cartograph.html) — single-page Codebase Intelligence app
-  (loads the three `lib/` modules).
+- [`cartograph.html`](cartograph.html) — single-page Codebase Intelligence app:
+  markup plus the explicit load order (four `lib/` modules, six `app/` scripts).
 - [`lib/cartograph-parser.js`](lib/cartograph-parser.js) — shared standalone
   deterministic parser (browser + Node).
 - [`lib/cartograph-agent.js`](lib/cartograph-agent.js) — deterministic agent
   tool executor and LLM-output validation gate (browser + Node).
 - [`lib/cartograph-evals.js`](lib/cartograph-evals.js) — groundedness/recall
   eval scorer and graph-derived benchmark cases (browser + Node).
+- [`lib/cartograph-fit.js`](lib/cartograph-fit.js) — fit-camera math that
+  frames the whole graph inside the visible canvas (browser + Node).
+- [`app/`](app/README.md) — the six browser-only UI scripts
+  (`cartograph-preset-repos`, `-graph-state`, `-canvas-render`, `-ui-panels`,
+  `-agent-evals`, `-app-shell`), split verbatim from the former single inline
+  script; see [`app/README.md`](app/README.md) for the file map and the
+  load-order invariant.
 - [`cli/cartograph-scan.mjs`](cli/cartograph-scan.mjs) — zero-dependency Node.js
   CLI scanner, report, and local server.
 - [`test/parser.test.js`](test/parser.test.js) — `node:test` suite for parser
@@ -112,25 +129,30 @@ open cartograph.html           # macOS; or double-click the file
   tool handlers, routing, and validation.
 - [`test/evals.test.js`](test/evals.test.js) — `node:test` suite for the eval
   scorer.
+- [`test/fit.test.js`](test/fit.test.js) — `node:test` suite for the
+  fit-camera framing.
 - [`PROJECT.md`](PROJECT.md) — product brief, golden rules, and anti-goals.
 - [`CLAUDE.md`](CLAUDE.md) — agent governance rules and invariants.
 - [`specs/`](specs/) — phase-by-phase engineering specifications.
 
 ## Browser App Map
 
-`cartograph.html` is one ~3,000-line file. The main landmarks are:
+`cartograph.html` is the markup plus an explicit load order — four `lib/`
+modules in `<head>`, then six classic scripts from `app/` at the end of
+`<body>` (a verbatim, order-preserving split of the former single inline
+script). The landmarks, in load order:
 
-| Concern | Function / location |
+| File | Landmarks |
 | --- | --- |
-| App state | `state` object (graph, selection, agent config) |
-| Parse pipeline | `parseRepositoryIntoGraph` → `applyParsedGraph` |
-| Graph rendering | `computeGraphNodePositions`, `drawDependencyGraph`, `selectFileNode` |
-| Inspector and explanations | `renderInspectorPanel`, `buildGroundedModuleExplanationHtml` |
-| Agent tool executor and trace | `buildDeterministicAgentPlan` (routes through `lib/cartograph-agent.js` `TOOLS` registry), `runAgentQuery` |
-| Evaluation suite | `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |
-| Settings and loading | `openSettingsModal`, `ingestUploadedFileObjects` |
+| `app/cartograph-preset-repos.js` | `PRESET_REPOS` demo repositories; the `AGENT_TOOLS` sample block (kept name-identical with the `lib/cartograph-agent.js` `TOOLS` registry) |
+| `app/cartograph-graph-state.js` | The `state` object (graph, selection, agent config); parse pipeline `parseRepositoryIntoGraph` → `applyParsedGraph`; layout `computeGraphNodePositions` (+ `CartographFit` camera fit), `getNodeVisualRole` |
+| `app/cartograph-canvas-render.js` | `drawDependencyGraph`, canvas animation loop, mouse/wheel interactions, `zoomGraph`, `resetGraphView`, `setGraphLayout`, blast-radius isolate, break simulation |
+| `app/cartograph-ui-panels.js` | `selectFileNode`, `renderInspectorPanel`, `buildGroundedModuleExplanationHtml`, file chips (`makeFileChipHtml`), header metrics |
+| `app/cartograph-agent-evals.js` | `buildDeterministicAgentPlan` and `runAgentQuery` (routing through the `lib/cartograph-agent.js` `TOOLS` registry); evaluation suite `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |
+| `app/cartograph-app-shell.js` | Loading: `ingestUploadedFileObjects`, `handlePresetChange`, `markPresetSelectCustom`; `openSettingsModal`; spec-docs viewer, modals, snapshot export, toasts; `DOMContentLoaded` bootstrap |
 
-Phase 02 and phase 03 specs describe the intended behavior of these areas.
+Phase 02 and phase 03 specs describe the intended behavior of these areas, and
+[`app/README.md`](app/README.md) documents the load-order invariant.
 
 ## Directory Guides
 
@@ -138,7 +160,8 @@ Start here when you need the contract for one area rather than the whole app:
 
 | Directory | Guide | Covers |
 | --- | --- | --- |
-| `lib/` | [lib/README.md](lib/README.md) | Parser API, graph schema, resolution rules, supported syntax, invariants |
+| `lib/` | [lib/README.md](lib/README.md) | Parser API and graph schema; agent, eval, and fit contracts; resolution rules; supported syntax; invariants |
+| `app/` | [app/README.md](app/README.md) | Browser UI layer: the six app scripts, load-order invariant, split provenance |
 | `cli/` | [cli/README.md](cli/README.md) | Scan scope, flags, snapshot format, terminal report, local server routes |
 | `test/` | [test/README.md](test/README.md) | Parser, planner, and eval tests; how to run or extend them; protected invariants |
 | `specs/` | [specs/README.md](specs/README.md) | Phase requirements, implementation mapping, known spec-to-code gaps |
@@ -151,4 +174,6 @@ node --test
 
 The suite runs against `parseRepository(files)` — the same public seam the CLI
 and browser app use. `npm test` runs the same command; `npm run scan -- <dir>`
-runs the CLI.
+runs the CLI. `node --test` never executes the browser-only `app/*.js`
+scripts; two contract tests read them as plain text to keep tool-name spelling
+consistent across surfaces.

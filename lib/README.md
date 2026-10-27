@@ -1,10 +1,11 @@
-# `lib/` — Shared Deterministic Parser
+# `lib/` — Shared Deterministic Modules
 
-`lib/cartograph-parser.js` is the single source of dependency truth in Cartograph.
-The browser app (`cartograph.html`), the CLI (`cli/cartograph-scan.mjs`), and the
-tests all load this exact file. There is no second parser, no bundler, no
-dependency, no network call, and no LLM involvement. Every node and edge comes
-from scanning real file text.
+`lib/` holds the four shared deterministic modules — parser, agent tool
+executor, eval scorer, and fit-camera — loaded unchanged by the browser app
+(`cartograph.html`), the CLI (`cli/cartograph-scan.mjs`), and the tests.
+There is no bundler, no dependency, no network call, and no LLM involvement in
+graph construction. `lib/cartograph-parser.js` is the single source of
+dependency truth: every node and edge comes from scanning real file text.
 
 The parser is line-oriented: it scans source lines with deterministic regular
 expressions and per-line quote tracking. It does **not** build a formal AST, and
@@ -110,8 +111,12 @@ Unresolved imports never become edges.
   tracker ignores import-like text inside `'...'`, `"..."`, and `` `...` `` on the
   same line. A stateful line scanner skips lines that start inside a multiline
   block comment or template literal. Full-line `//`, `#`, `/*`, `*/`, and `*`
-  comments are skipped. Trailing comments on the same line as an import are not
-  modeled, so import-like text in a trailing comment can still produce an edge.
+  comments are skipped. Two imperfect spots remain: trailing comments on the
+  same line as an import are not modeled (import-like text in a trailing
+  comment can still produce an edge), and template-literal nesting can
+  desynchronize the line scanner — import-shaped text inside the CLI-source
+  doc embedded in `app/cartograph-app-shell.js` produces an edge that is not
+  executed code, while a plain multi-line template is correctly skipped.
 
 ## Module resolution
 
@@ -178,6 +183,7 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
 | `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
 | `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
+| `cartograph-fit.js` | DOM-free fit-camera math (`computeFitCamera`): pure UMD like the parser — browser global `CartographFit`, Node `module.exports` — used by `app/cartograph-graph-state.js` to frame the graph inside the canvas; covered by `test/fit.test.js` (fit-camera contract below) |
 | `README.md` | This guide |
 
 Eval scorer contract for `cartograph-evals.js` (all exports are DOM-free):
@@ -188,6 +194,12 @@ Eval scorer contract for `cartograph-evals.js` (all exports are DOM-free):
 | `collectTraceFiles(plan)` | Unions every trace step's `files` in order, deduped — the provenance set |
 | `scoreCase({ graph, citedFiles, expectedFiles, traceFiles, requireProvenance })` | Returns `{ citedFiles, hallucinatedPaths, unprovenPaths, groundedCount, totalCited, recalledCount, totalExpected, groundednessScore, recallScore, passed }`. Hallucinated = cited path missing from the graph; unproven = cited, in-graph, but absent from `traceFiles` when `requireProvenance` is true; groundedness% = grounded / cited (0 cited → 100); recall% = \|expected ∩ cited\| / \|expected\| (0 expected → 100); `passed` = 0 hallucinated ∧ 0 unproven ∧ recall exactly 100 |
 | `computeSuiteSummary(perCase, plans)` | Aggregates overall groundedness/recall percentages and a 1-decimal average step count |
+
+Fit-camera contract for `cartograph-fit.js` (DOM-free, Node-testable):
+
+| Export | Contract |
+| --- | --- |
+| `computeFitCamera(box, width, height, padding)` | Given a world-space box `{ minX, minY, maxX, maxY }` and the visible canvas size, returns `{ x, y, zoom }`: a uniform zoom (clamped to `[0.05, 2.6]`) and translation that fit the box inside `width` × `height`. `padding` is a number or a per-side `{ top, right, bottom, left }` object — the app passes chrome-aware padding so nodes stay clear of the top bar and legend. Degenerate or empty boxes fall back to a sane camera. |
 
 Architectural rules that constrain this module live in
 [`../PROJECT.md`](../PROJECT.md) and [`../CLAUDE.md`](../CLAUDE.md). Phase

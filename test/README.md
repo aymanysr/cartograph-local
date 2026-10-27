@@ -1,11 +1,13 @@
-# `test/` — Parser, Planner, and Eval Test Suite
+# `test/` — Parser, Planner, Evals, and Fit Test Suite
 
-`test/parser.test.js`, `test/agent.test.js`, and `test/evals.test.js` are the
-executable contracts for the shared modules and the CLI. They use the Node
-built-in test runner (`node:test`) and `node:assert/strict`, with no test
-framework dependency and no network access. Tests go through the same public
-seams the app and CLI use: `parseRepository(files)`, `CartographAgent.buildAgentPlan(...)`,
-`CartographAgent.validateSynthesis(...)`, and `CartographEvals.scoreCase(...)`.
+`test/parser.test.js`, `test/agent.test.js`, `test/evals.test.js`, and
+`test/fit.test.js` are the executable contracts for the shared modules and the
+CLI. They use the Node built-in test runner (`node:test`) and
+`node:assert/strict`, with no test framework dependency and no network access.
+Tests go through the same public seams the app and CLI use:
+`parseRepository(files)`, `CartographAgent.buildAgentPlan(...)`,
+`CartographAgent.validateSynthesis(...)`, `CartographEvals.scoreCase(...)`,
+and `CartographFit.computeFitCamera(...)`.
 
 ## Verify
 
@@ -31,7 +33,7 @@ that naming pattern.
 
 ## Coverage
 
-Forty-eight tests across three files, grouped by the behavior they lock down.
+Fifty-three tests across four files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -52,9 +54,11 @@ Forty-eight tests across three files, grouped by the behavior they lock down.
 Most tests treat the repository as pure data. The CLI test writes: it creates a
 fixture under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written
 JSON snapshot, and removes the fixture in a `finally` block. Three agent tests
-also read repository files — read-only — to keep the tool-name alignment locked
-(they scan `specs/`, `PROJECT.md`, `README.md`, and `cartograph.html` for the
-canonical tool spellings).
+also read repository files — read-only — to keep the tool-name alignment
+locked. Two of them scan the full UI surface (`cartograph.html` plus every
+`app/*.js` script), so the app split can never loosen what they guarantee; the
+legacy-spelling scan additionally covers `specs/`, `PROJECT.md`, and
+`README.md`.
 
 `test/agent.test.js` (27 cases) — the DOM-free agent: a tool-handler registry
 (`CartographAgent.TOOLS`), the question router/executor, and the synthesis
@@ -87,9 +91,9 @@ run the full public pipeline:
 | `find_entry_points returns the real zero-incoming nodes` | Files equal the graph-derived `inDegree === 0` set |
 | `detect_cycles_and_hubs finds real cycles and ranks real hubs` | A two-file cycle fixture triggers `Circular dependencies: 1` with cycle members traced; the acyclic fixture reports 0 and traces both ranked hubs |
 | `plan steps are produced by tool executes, not precomputed strings` | The same question against two different repositories yields graph-specific outputs (paths, counts, LOC) — step text cannot be literals |
-| `spec, docs, and UI copy never use the legacy tool spellings` | Reads `specs/phase-03-agent-evals.md`, `specs/README.md`, `PROJECT.md`, `README.md`, and `cartograph.html` and fails on any `trace_path` or bare `detect_cycles` (word-boundary aware — `_` keeps `detect_cycles_and_hubs` one token) |
+| `spec, docs, and UI copy never use the legacy tool spellings` | Reads `specs/phase-03-agent-evals.md`, `specs/README.md`, `PROJECT.md`, `README.md`, and the full UI surface (`cartograph.html` + `app/*.js`), failing on any `trace_path` or bare `detect_cycles` (word-boundary aware — `_` keeps `detect_cycles_and_hubs` one token) |
 | `phase-03 spec lists every canonical handler name` | Every `TOOLS` registry key appears verbatim in the phase-03 spec |
-| `the UI AGENT_TOOLS sample lists every canonical handler name` | The demo `AGENT_TOOLS` sample block contains all six canonical names as string literals |
+| `the UI AGENT_TOOLS sample lists every canonical handler name` | The demo `AGENT_TOOLS` sample block — wherever it lives in `cartograph.html` or `app/*.js` — contains all six canonical names as string literals |
 
 `test/evals.test.js` (10 cases) — the trace-provenance eval scorer. The PASS
 rule these tests exercise: a case passes only when citation groundedness is
@@ -108,6 +112,18 @@ rule these tests exercise: a case passes only when citation groundedness is
 | `collectTraceFiles unions step files in order and dedupes` | Trace provenance set equals the union of all step files |
 | `computeSuiteSummary aggregates real percentages and average step latency` | Overall groundedness/recall/counts and 1-decimal average step latency |
 | `scoreCase guards against empty citations and empty expectations` | `0 cited` grounds at 100 while recall hits 0; `0 expected` recalls at 100 |
+
+`test/fit.test.js` (5 cases) — the fit-camera contract for
+`lib/cartograph-fit.js`, which `app/cartograph-graph-state.js` calls so the
+whole graph lands inside the visible canvas:
+
+| Test | What it proves |
+| --- | --- |
+| `fits the layered (dag) world box without clipping and centers it` | A layered (DAG) world fits the canvas with uniform zoom and ends up centered |
+| `fits the force-graph world box (343-node scatter) onto the canvas` | A wide force-layout scatter fits with slack to spare |
+| `zoom clamps to MIN_ZOOM for huge worlds and MAX_ZOOM for specks` | The clamp keeps extreme worlds displayable instead of exploding |
+| `per-side padding keeps the graph clear of the canvas chrome` | Per-side padding reserves the top toolbar and the bottom legend so no node hides behind them |
+| `degenerate boxes fall back to sane cameras` | Empty or one-sided world boxes never produce NaN or inverted cameras |
 
 Parser coverage gap (only): trailing comments on an import line and Python
 triple-quoted strings are not modeled.
@@ -174,6 +190,7 @@ test('resolves a new edge case', () => {
 | `parser.test.js` | Parser and CLI tests (11 cases) |
 | `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, synthesis-validation, and cross-surface tool-name consistency tests (27 cases) |
 | `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
+| `fit.test.js` | Fit-camera framing tests for `lib/cartograph-fit.js` (5 cases) |
 | `README.md` | This guide |
 
 The parser API and graph schema are documented in

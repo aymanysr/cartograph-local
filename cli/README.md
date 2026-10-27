@@ -97,12 +97,14 @@ After writing the snapshot, the CLI prints:
    outbound import.
 
 A scan of this repository at the time of writing reports
-`lib/cartograph-parser.js` as the top hotspot, with four direct dependents:
-`cli/cartograph-scan.mjs` and the three `test/*.test.js` files.
-`lib/cartograph-agent.js` follows with three. `cartograph.html` does not appear
-because HTML is outside the scan scope. Treat the excerpt below as an example
-snapshot, not a permanent invariant — adding or removing source files changes
-the counts it prints.
+`lib/cartograph-parser.js` as the top hotspot, with five direct dependents:
+`cli/cartograph-scan.mjs`, the three `test/*.test.js` files, and one scanner
+artifact — import-shaped text inside the CLI source embedded as displayed doc
+text in `app/cartograph-app-shell.js` (they read the parser, but that edge is
+doc text, not executed code). `lib/cartograph-agent.js` follows with three.
+`cartograph.html` does not appear because HTML is outside the scan scope.
+Treat the excerpt below as an example snapshot, not a permanent invariant —
+adding or removing source files changes the counts it prints.
 
 Sample report excerpt:
 
@@ -134,14 +136,14 @@ until interrupted.
 | Route | Response |
 | --- | --- |
 | `/` and `/cartograph.html` | `cartograph.html` from the repository root |
-| `/lib/cartograph-parser.js` | The shared parser, served as JavaScript |
-| `/lib/cartograph-agent.js` | The agent module, served as JavaScript |
-| `/lib/cartograph-evals.js` | The eval scorer module, served as JavaScript |
+| `/lib/*.js`, `/app/*.js` | Any classic script under `lib/` or `app/` whose name matches `[A-Za-z0-9_-]+\.js`, read from disk and served as JavaScript; a pattern-valid but missing file is `404 Not found` (single-segment names only — no dots or nested paths) |
 | `/api/local-repo` | The just-scanned `{ name, scannedAt, graph }` payload as JSON |
 | `/favicon.ico` | `204 No Content` |
 | Anything else | `404 Not found` |
 
-The HTML, the lib modules, and the JSON response use `Cache-Control: no-store`.
+The HTML, the served scripts, and the JSON response all use
+`Cache-Control: no-store`. The script route is resolved dynamically, so adding
+a `lib/` or `app/` file never requires touching the serve route.
 
 ```bash
 node cli/cartograph-scan.mjs /path/to/repo --serve 4173

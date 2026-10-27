@@ -19,8 +19,8 @@ Record the conflict instead of silently coding around it.
 | Spec | Scope | Primary implementation | Verification |
 | --- | --- | --- | --- |
 | [`phase-01-parser.md`](phase-01-parser.md) | Deterministic import/export graph | `lib/cartograph-parser.js`, `cli/cartograph-scan.mjs` | `node --test` |
-| [`phase-02-graph-ui.md`](phase-02-graph-ui.md) | Interactive map, blast radius, grounded explainer | `cartograph.html` | Manual browser checks |
-| [`phase-03-agent-evals.md`](phase-03-agent-evals.md) | Graph-walking agent and quantitative evals | `cartograph.html` + `lib/cartograph-agent.js` + `lib/cartograph-evals.js` | Manual agent and Evals tabs |
+| [`phase-02-graph-ui.md`](phase-02-graph-ui.md) | Interactive map, blast radius, grounded explainer | `cartograph.html` + `app/*.js` (canvas render, UI panels) | Manual browser checks |
+| [`phase-03-agent-evals.md`](phase-03-agent-evals.md) | Graph-walking agent and quantitative evals | `cartograph.html` + `app/*.js` (agent-evals, app-shell) + `lib/cartograph-agent.js` + `lib/cartograph-evals.js` | Manual agent and Evals tabs |
 
 ## Phase summaries
 
@@ -61,8 +61,10 @@ Required behavior:
 - Grounded module explanation that references only verified connected files,
   with every cited path rendered as a clickable badge.
 
-All of this is implemented in the single-file app `cartograph.html`; there is no
-framework or build step.
+All of this is implemented without a framework or build step. `cartograph.html`
+holds the markup and load order; the app script itself is split, verbatim and in
+original order, across the classic scripts in `app/` (`preset-repos`,
+`graph-state`, `canvas-render`, `ui-panels`, `agent-evals`, `app-shell`).
 
 ### Phase 03 — Agent and evals
 
@@ -92,6 +94,7 @@ requests to change code.
 | Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan's DFS-based (depth-first search) strongly-connected-component algorithm; self-imports are dropped before cycle detection |
 | Agent loop | Phase 03 describes a tool-calling loop | The agent routes questions to concrete call arguments over the `CartographAgent.TOOLS` handler registry and executes them — every trace step's output/files is derived live from the graph (see the ticket-04 outcome notes: [`../.scratch/agent-grounding/issues/04-tool-executor.md`](../.scratch/agent-grounding/issues/04-tool-executor.md)). Routing stays keyword-based, so it is still not an LLM-driven tool-calling loop |
 | Hallucination metric | Phase 03 describes a Hallucination Rate | The UI displays a hallucinated-path count (`evalScoreHallucinations`), not a percentage |
+| Scan precision | Every edge originates from a parsed import statement | Still true, but import-shaped *doc text* gets parsed as one: the CLI source embedded as displayed text in `app/cartograph-app-shell.js` yields an `app-shell` → `lib/cartograph-parser.js` edge that is not executed code (visible since the app split moved that doc into a `.js` file). Plain multi-line template skipping works; nested-template desync is a line-scanner limitation, not a parser-model break |
 
 ## Invariants
 
