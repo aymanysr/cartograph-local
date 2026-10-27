@@ -91,7 +91,6 @@ requests to change code.
 | Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan SCC (DFS-based); self-imports are dropped before cycle detection |
 | Agent tool names | Phase 03 lists `trace_path` and `detect_cycles` | UI traces use `trace_dependency_path`; `detect_cycles_and_hubs` exists only as a step label in the deterministic planner, with no executor behind it |
 | Agent loop | Phase 03 describes a tool-calling loop | The built-in deterministic agent is a keyword-routed planner (`CartographAgent.buildAgentPlan`) that emits labeled steps, not a generic executor over arbitrary tool arguments |
-| LLM grounding | `CLAUDE.md` says cited paths outside the graph must be rejected | The optional LLM receives an allowed-path prompt, but its response is only escaped and chip-ified; unknown paths are not rejected after generation |
 | Hallucination metric | Phase 03 describes a Hallucination Rate | The UI displays a hallucinated-path count (`evalScoreHallucinations`), not a percentage |
 
 ## Invariants

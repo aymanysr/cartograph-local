@@ -194,3 +194,84 @@ test('findAuthNodes matches auth paths and exports, in node order', () => {
   );
   assert.deepEqual(findAuthNodes(plain.nodes), []);
 });
+
+const {
+  validateSynthesis,
+} = require('../lib/cartograph-agent.js');
+
+const OTHER = 'src/app/api/other.ts';
+const GRAPH = buildFixtureGraph();
+const TRACE = [VERIFY, SERVER];
+
+function acceptGraph() {
+  return GRAPH;
+}
+
+function synthesis(text, tracePaths) {
+  return validateSynthesis(text, acceptGraph(), tracePaths || TRACE);
+}
+
+test('validateSynthesis accepts answers that only cite traced paths', () => {
+  const outcome = synthesis(
+    `Authentication is enforced in ${VERIFY}, backed by ${SERVER}.`,
+    TRACE
+  );
+  assert.equal(outcome.accepted, true);
+  assert.deepEqual(outcome.citedPaths, [VERIFY, SERVER]);
+  assert.deepEqual(outcome.unknownPaths, []);
+  assert.deepEqual(outcome.unprovenPaths, []);
+});
+
+test('validateSynthesis rejects invented paths outside the graph', () => {
+  const outcome = synthesis(
+    'Auth uses src/middleware/session-cookie.ts and src/middleware/session-cookie.ts for tokens.',
+    TRACE
+  );
+  assert.equal(outcome.accepted, false);
+  assert.deepEqual(outcome.unknownPaths, ['src/middleware/session-cookie.ts'], 'duplicate mentions are deduped');
+  assert.deepEqual(outcome.unprovenPaths, []);
+});
+
+test('validateSynthesis rejects real paths that were never traced', () => {
+  const outcome = synthesis(`It also relates to ${ROUTES} nearby.`, TRACE);
+  assert.equal(outcome.accepted, false);
+  assert.deepEqual(outcome.citedPaths, [ROUTES]);
+  assert.deepEqual(outcome.unprovenPaths, [ROUTES]);
+  assert.deepEqual(outcome.unknownPaths, []);
+});
+
+test('validateSynthesis accepts real paths once they appear in the trace', () => {
+  const outcome = synthesis(`It also relates to ${ROUTES} nearby.`, [...TRACE, ROUTES]);
+  assert.equal(outcome.accepted, true);
+  assert.deepEqual(outcome.unprovenPaths, []);
+});
+
+test('validateSynthesis strips URLs and treats slash prose as non-paths', () => {
+  const outcome = synthesis(
+    'See https://example.com/docs/api/chat.ts?page=1. The cost/benefit and/or input/output tradeoffs apply.',
+    TRACE
+  );
+  assert.equal(outcome.accepted, true, 'URLs and extension-less slash words are not file citations');
+  assert.deepEqual(outcome.unknownPaths, []);
+});
+
+test('validateSynthesis reports a graph-less trace as unproven (provenance on)', () => {
+  const outcome = synthesis(`Answers ${VERIFY}.`, []);
+  assert.equal(outcome.accepted, false);
+  assert.deepEqual(outcome.unprovenPaths, [VERIFY]);
+});
+
+test('validateSynthesis passes prose without any path-like token', () => {
+  const outcome = synthesis('Auth is handled across two modules with 3 checks.');
+  assert.equal(outcome.accepted, true);
+  assert.deepEqual(outcome.citedPaths, []);
+});
+
+test('validateSynthesis tolerates empty text and an empty graph', () => {
+  assert.equal(validateSynthesis('', GRAPH, TRACE).accepted, true);
+
+  const emptyGraph = { nodes: [] };
+  const outcome = validateSynthesis('Cites src/ghost.ts here.', emptyGraph, TRACE);
+  assert.equal(outcome.accepted, false);
+  assert.deepEqual(outcome.unknownPaths, ['src/ghost.ts']);
+});

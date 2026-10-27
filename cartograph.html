@@ -2228,14 +2228,24 @@ def create_app():
             const data = await resp.json();
             const rawText = (data.message && data.message.content) || (data.choices && data.choices[0]?.message?.content) || '';
             if (rawText) {
-              let enriched = escapeHtml(rawText);
-              state.graph.nodes.forEach(n => {
-                const re = new RegExp(n.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                enriched = enriched.replace(re, makeFileChipHtml(n.path));
-              });
-              const cardEl = document.getElementById(cardId);
-              if (cardEl) {
-                cardEl.querySelector('.agent-synthesis-body').innerHTML = enriched;
+              // Strict grounding contract: the model synthesis may only replace
+              // the deterministic answer when every path-like token it named is
+              // a real graph path that appeared in the tool trace.
+              const tracePaths = CartographEvals.collectTraceFiles(plan);
+              const outcome = CartographAgent.validateSynthesis(rawText, state.graph, tracePaths);
+              if (outcome.accepted) {
+                let enriched = escapeHtml(rawText);
+                state.graph.nodes.forEach(n => {
+                  const re = new RegExp(n.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                  enriched = enriched.replace(re, makeFileChipHtml(n.path));
+                });
+                const cardEl = document.getElementById(cardId);
+                if (cardEl) {
+                  cardEl.querySelector('.agent-synthesis-body').innerHTML = enriched;
+                }
+              } else {
+                const rejected = outcome.unknownPaths.concat(outcome.unprovenPaths).slice(0, 3).join(', ');
+                showToast(`Rejected ${state.agentConfig.model || 'LLM'} answer — ungrounded path(s): ${rejected}`, 'warn');
               }
             }
           }

@@ -51,7 +51,10 @@ open cartograph.html           # macOS; or double-click the file
    ```
    Open the sliders button in the top bar (**"AST Walker (Local)"**), choose the
    **"Local Agent Execution & Ollama Settings"** modal, and set the endpoint to
-   `http://localhost:11434/api/chat`.
+   `http://localhost:11434/api/chat`. Whatever the model writes is validated
+   before it may replace the deterministic answer: any path-like token that is
+   outside the parsed graph or the visible tool trace keeps the deterministic
+   synthesis and shows a rejection toast naming the ungrounded paths.
 
 ## Glossary
 

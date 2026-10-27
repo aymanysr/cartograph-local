@@ -4,7 +4,8 @@
 executable contracts for the shared modules and the CLI. They use the Node
 built-in test runner (`node:test`) and `node:assert/strict`, with no test
 framework dependency and no network access. Tests go through the same public
-seams the app and CLI use: `parseRepository(files)`, `CartographAgent.buildAgentPlan(...)`, and `CartographEvals.scoreCase(...)`.
+seams the app and CLI use: `parseRepository(files)`, `CartographAgent.buildAgentPlan(...)`,
+`CartographAgent.validateSynthesis(...)`, and `CartographEvals.scoreCase(...)`.
 
 ## Verify
 
@@ -30,7 +31,7 @@ that naming pattern.
 
 ## Coverage
 
-Twenty-nine tests across three files, grouped by the behavior they lock down.
+Thirty-seven tests across three files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -52,8 +53,9 @@ The CLI test is the only one that touches the filesystem. It creates a fixture
 under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written JSON
 snapshot, and removes the fixture in a `finally` block.
 
-`test/agent.test.js` (8 cases) — the DOM-free agent planner. Fixture graphs are
-built through `parseRepository`, so planner tests run the full public pipeline:
+`test/agent.test.js` (16 cases) — the DOM-free agent planner and the synthesis
+validator. Fixture graphs are built through `parseRepository`, so planner tests
+run the full public pipeline:
 
 | Test | What it proves |
 | --- | --- |
@@ -65,6 +67,14 @@ built through `parseRepository`, so planner tests run the full public pipeline:
 | `planner is pure: identical inputs produce identical plans` | Repeat runs return identical steps/visited/activeEdges/citations/answer |
 | `planner reports no state mutation across repeated runs` | The planner never mutates graph node metrics |
 | `findAuthNodes matches auth paths and exports, in node order` | Auth detection by path and export names; empty list when no signal exists |
+| `validateSynthesis accepts answers that only cite traced paths` | A synthesis whose only path-like tokens are graph paths that appeared in the trace is accepted, with `citedPaths` collected in order |
+| `validateSynthesis rejects invented paths outside the graph` | A path-like token that names no real node lands in `unknownPaths` (duplicates deduped) and the answer is rejected |
+| `validateSynthesis rejects real paths that were never traced` | A real graph path that never appeared in the tool trace lands in `unprovenPaths` and the answer is rejected |
+| `validateSynthesis accepts real paths once they appear in the trace` | Adding the cited path to the trace clears `unprovenPaths`, so the same synthesis becomes acceptable |
+| `validateSynthesis strips URLs and treats slash prose as non-paths` | `scheme://` URLs are removed before scanning; extension-less slash words like `and/or` never count as file citations |
+| `validateSynthesis reports a graph-less trace as unproven (provenance on)` | With an empty trace, every cited graph path is flagged unproven and the answer is rejected |
+| `validateSynthesis passes prose without any path-like token` | Prose with no slash-token produces no citations and is accepted |
+| `validateSynthesis tolerates empty text and an empty graph` | Empty text is accepted; an empty graph makes any invented path `unknownPaths` and the answer rejected |
 
 `test/evals.test.js` (10 cases) — the trace-provenance eval scorer:
 
@@ -144,7 +154,7 @@ test('resolves a new edge case', () => {
 | File | Role |
 | --- | --- |
 | `parser.test.js` | Parser and CLI tests (11 cases) |
-| `agent.test.js` | Agent planner routing, grounding, and purity tests (8 cases) |
+| `agent.test.js` | Agent planner routing, grounding, purity, and synthesis-validation tests (16 cases) |
 | `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
 | `README.md` | This guide |
 
