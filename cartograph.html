@@ -2616,6 +2616,16 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         return;
       }
 
+      markPresetSelectCustom(`local: ${rootFolder} (${collected.length} files)`);
+
+      parseRepositoryIntoGraph(collected, rootFolder, `Local folder loaded directly from disk (${collected.length} files)`);
+      showToast(`Parsed ${collected.length} local files from "${rootFolder}"`);
+    }
+
+    // Relabels the preset dropdown with an opt-out "loaded from disk/server"
+    // entry so the select reflects what is actually rendered instead of a
+    // bundled sample. Used by the local-folder path and the --serve loader.
+    function markPresetSelectCustom(label) {
       const select = document.getElementById('repoPresetSelect');
       let customOpt = select.querySelector('option[value="custom-local"]');
       if (!customOpt) {
@@ -2623,11 +2633,8 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         customOpt.value = 'custom-local';
         select.prepend(customOpt);
       }
-      customOpt.textContent = `local: ${rootFolder} (${collected.length} files)`;
+      customOpt.textContent = label;
       select.value = 'custom-local';
-
-      parseRepositoryIntoGraph(collected, rootFolder, `Local folder loaded directly from disk (${collected.length} files)`);
-      showToast(`Parsed ${collected.length} local files from "${rootFolder}"`);
     }
 
     function openAddFileModal() {
@@ -2875,6 +2882,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
           const payload = await response.json();
           if (payload && payload.graph && Array.isArray(payload.graph.nodes)) {
             applyParsedGraph(payload.graph);
+            markPresetSelectCustom(`local: ${payload.name || payload.graph.name || 'local repository'} (${(payload.graph.nodes || []).length} files)`);
             loadedFromServer = true;
             showToast(`Loaded scanned repository: ${payload.name || payload.graph.name || 'local'}`);
           }
