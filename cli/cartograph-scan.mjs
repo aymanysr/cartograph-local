@@ -161,7 +161,11 @@ function printBlastRadiusReport(graph, focusFile, topN = 10) {
 
 function serveApp(port, payload) {
   const htmlPath = path.resolve(__dirname, '..', 'cartograph.html');
-  const parserPath = path.resolve(__dirname, '..', 'lib', 'cartograph-parser.js');
+  const libFiles = new Map([
+    ['/lib/cartograph-parser.js', path.resolve(__dirname, '..', 'lib', 'cartograph-parser.js')],
+    ['/lib/cartograph-agent.js', path.resolve(__dirname, '..', 'lib', 'cartograph-agent.js')],
+    ['/lib/cartograph-evals.js', path.resolve(__dirname, '..', 'lib', 'cartograph-evals.js')],
+  ]);
 
   const server = http.createServer((req, res) => {
     const url = req.url.split('?')[0];
@@ -171,9 +175,9 @@ function serveApp(port, payload) {
       res.end(JSON.stringify(payload));
       return;
     }
-    if (url === '/lib/cartograph-parser.js') {
+    if (libFiles.has(url)) {
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(fs.readFileSync(parserPath));
+      res.end(fs.readFileSync(libFiles.get(url)));
       return;
     }
     if (url === '/' || url === '/cartograph.html') {

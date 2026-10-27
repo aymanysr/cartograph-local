@@ -1,9 +1,10 @@
-# `test/` — Parser and CLI Test Suite
+# `test/` — Parser, Planner, and Eval Test Suite
 
-`test/parser.test.js` is the executable contract for the shared parser and the
-CLI. It uses the Node built-in test runner (`node:test`) and `node:assert/strict`,
-with no test framework dependency and no network access. All parser tests go
-through the same public seam the app and CLI use: `parseRepository(files)`.
+`test/parser.test.js`, `test/agent.test.js`, and `test/evals.test.js` are the
+executable contracts for the shared modules and the CLI. They use the Node
+built-in test runner (`node:test`) and `node:assert/strict`, with no test
+framework dependency and no network access. Tests go through the same public
+seams the app and CLI use: `parseRepository(files)`, `CartographAgent.buildAgentPlan(...)`, and `CartographEvals.scoreCase(...)`.
 
 ## Verify
 
@@ -29,7 +30,9 @@ that naming pattern.
 
 ## Coverage
 
-Eleven tests, grouped by the behavior they lock down.
+Twenty-nine tests across three files, grouped by the behavior they lock down.
+
+`test/parser.test.js` (11 cases) — parser and CLI:
 
 | Test | What it proves |
 | --- | --- |
@@ -45,11 +48,40 @@ Eleven tests, grouped by the behavior they lock down.
 | `parseRepository extracts named and default exports` | Default function, default class, default identifier, and anonymous default forms all surface in `node.exports` |
 | `CLI scans a folder into a parsed graph and prints a blast-radius report` | A temporary directory is scanned through `cli/cartograph-scan.mjs`; the snapshot has the expected edge, `inDegree`, and `hop1Files`; stdout contains the hotspot report |
 
-The last test is the only one that touches the filesystem. It creates a fixture
+The CLI test is the only one that touches the filesystem. It creates a fixture
 under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written JSON
 snapshot, and removes the fixture in a `finally` block.
 
-Remaining coverage gap: trailing comments on an import line and Python
+`test/agent.test.js` (8 cases) — the DOM-free agent planner. Fixture graphs are
+built through `parseRepository`, so planner tests run the full public pipeline:
+
+| Test | What it proves |
+| --- | --- |
+| `planner routes auth questions through the auth branch` | Auth keyword routing picks the auth node; steps, visited files, and highlighted edges match the walk |
+| `planner routes blast questions by full path and traces outbound imports` | A question naming a full path routes to the blast branch even if the path contains `auth`; the outbound trace step runs and highlights outbound edges |
+| `planner blast route cites its 1-hop and 2-hop dependents and outbound targets` | Every expected dependent/outbound target is cited, and every citation appears in the tool trace (the provenance invariant) |
+| `planner blast route matches by full path before the label fallback` | Two files sharing a label (`repo.ts`): the question's exact path wins; the label fallback cannot divert the target |
+| `planner falls back to the generic parser-to-UI walk for open questions` | The generic branch emits `search_symbols` + `trace_dependency_path` and stays grounded |
+| `planner is pure: identical inputs produce identical plans` | Repeat runs return identical steps/visited/activeEdges/citations/answer |
+| `planner reports no state mutation across repeated runs` | The planner never mutates graph node metrics |
+| `findAuthNodes matches auth paths and exports, in node order` | Auth detection by path and export names; empty list when no signal exists |
+
+`test/evals.test.js` (10 cases) — the trace-provenance eval scorer:
+
+| Test | What it proves |
+| --- | --- |
+| `buildBenchmarkCases produces three graph-derived cases...` | Cases derive from graph metrics; case 3's question routes through the blast branch |
+| `naive benchmark lists include invented paths...` | Naive fallbacks contain at least one path outside the graph (the demo hallucination) |
+| `strict runs pass all cases: grounded, proven, full recall` | Real planner runs score 100% grounded (zero unproven) and 100% recall on the fixture |
+| `the provenance rule fails a case when a real path was never traced` | Cited-but-untraced real path → `unprovenPaths`, groundedness drops (50%), case fails |
+| `hallucinated citations are paths outside the graph and fail the case` | Invented paths are flagged and fail the case even when provenance is off |
+| `naive mode grounds by existence only (no trace provenance)` | `requireProvenance: false` skips the trace check; demo naive lists still fail via invented paths |
+| `recall measures expected coverage, independently of grounding` | Recall formula and the interaction with the PASS rule |
+| `collectTraceFiles unions step files in order and dedupes` | Trace provenance set equals the union of all step files |
+| `computeSuiteSummary aggregates real percentages and average step latency` | Overall groundedness/recall/counts and 1-decimal average step latency |
+| `scoreCase guards against empty citations and empty expectations` | `0 cited` grounds at 100 while recall hits 0; `0 expected` recalls at 100 |
+
+Parser coverage gap (only): trailing comments on an import line and Python
 triple-quoted strings are not modeled.
 
 ## Conventions
@@ -111,7 +143,9 @@ test('resolves a new edge case', () => {
 
 | File | Role |
 | --- | --- |
-| `parser.test.js` | All parser and CLI tests |
+| `parser.test.js` | Parser and CLI tests (11 cases) |
+| `agent.test.js` | Agent planner routing, grounding, and purity tests (8 cases) |
+| `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
 | `README.md` | This guide |
 
 The parser API and graph schema are documented in

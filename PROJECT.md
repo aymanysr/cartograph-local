@@ -41,11 +41,11 @@ AI coding agents write thousands of lines of working code across dozens of files
    - **Current implementation caveat:** the built-in agent is a keyword-routed planner that emits labeled, precomputed trace steps; it is not a generic executor over arbitrary tool arguments. External LLM output is not yet rejected for unknown paths after generation. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
 
 5. **Quantitative Agent Evals ("Catching the AI with a Number")**
-   - Runs a golden dataset of repository questions against the agent and computes numerical scores for:
-     - **Citation Groundedness (%)**: `valid cited paths / total cited paths`. Every cited file must exist in the parsed graph and have been inspected by a tool call.
+   - Runs a golden dataset of repository questions against the deterministic agent and computes numerical scores for:
+     - **Citation Groundedness (%)**: `valid cited paths / total cited paths`. A citation is valid only if the path exists in the parsed graph **and** appeared in the agent's tool trace (strict mode). Naive/blind mode grounds by graph existence only, so it catches invented paths but cannot prove provenance.
      - **Blast-Radius Recall (%)**: `expected dependents cited / expected dependents`. All 1-hop and 2-hop dependents must be accurately identified.
-     - **Zero Hallucinated Edges**: Any invented file path or unverified connection drops the score to 0.
-   - **Current implementation caveat:** the Evals tab scores pre-authored citation lists; it does not execute the agent per case, and it checks graph existence rather than tool-trace provenance. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
+     - **Zero Hallucinated Paths**: Any invented file path drops the score.
+   - Strict mode executes the agent per case and shows each case's real tool-step count; scoring lives in the shared, DOM-free `lib/cartograph-evals.js` (see [`lib/README.md`](lib/README.md)).
 
 ## Things We Refuse To Do (And Why)
 - **No "Code Quality Grades" or arbitrary 1–10 health scores**: LLMs invent subjective numbers that mean nothing across runs. Only report deterministic metrics (in-degree, out-degree, 2-hop blast radius count, circular dependency cycles).

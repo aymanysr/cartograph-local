@@ -90,10 +90,8 @@ requests to change code.
 | Parser model | The parser is deterministic and line-oriented | `lib/cartograph-parser.js` is a line-oriented regex scanner with quote/comment masking; it builds no AST, while the app UI still uses "AST" branding |
 | Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan SCC (DFS-based); self-imports are dropped before cycle detection |
 | Agent tool names | Phase 03 lists `trace_path` and `detect_cycles` | UI traces use `trace_dependency_path`; `detect_cycles_and_hubs` exists only as a step label in the deterministic planner, with no executor behind it |
-| Agent loop | Phase 03 describes a tool-calling loop | The built-in deterministic agent is a keyword-routed planner (`buildDeterministicAgentPlan`) that emits labeled steps, not a generic executor over arbitrary tool arguments |
+| Agent loop | Phase 03 describes a tool-calling loop | The built-in deterministic agent is a keyword-routed planner (`CartographAgent.buildAgentPlan`) that emits labeled steps, not a generic executor over arbitrary tool arguments |
 | LLM grounding | `CLAUDE.md` says cited paths outside the graph must be rejected | The optional LLM receives an allowed-path prompt, but its response is only escaped and chip-ified; unknown paths are not rejected after generation |
-| Eval execution | `PROJECT.md` says evals run questions against the agent | The Evals tab scores pre-authored `strictCited`/`naiveCited` lists against graph nodes; it does not execute the agent per case. The naive list deliberately contains fake paths to demonstrate detection |
-| Eval grounding check | `PROJECT.md` requires every citation to have been inspected by a tool call | The suite checks that cited paths exist in `state.graph.nodes`; it does not verify that each citation appeared in the tool trace |
 | Hallucination metric | Phase 03 describes a Hallucination Rate | The UI displays a hallucinated-path count (`evalScoreHallucinations`), not a percentage |
 
 ## Invariants
@@ -120,8 +118,10 @@ Browser QA script:
 4. Open the **Agent** tab, run a question, and confirm each trace step shows a
    tool name, arguments, output, and verified files.
 5. Open **Agent Evals**, click **Run Full Benchmark Suite**, and confirm the
-   groundedness and hallucination cards update. Note: the current suite scores
-   pre-authored citation lists, not live agent runs (see the gap table above).
+   groundedness, recall, and latency cards update. Strict mode executes the
+   deterministic agent for every case, cites only files the planner visited or
+   traced, and shows each case's real tool-step count. Naive mode scores the
+   canned, deliberately hallucinated fallback lists.
 6. Open the sliders button (**"AST Walker (Local)"**) to check the optional
    Ollama/OpenAI-compatible settings modal.
 

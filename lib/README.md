@@ -173,6 +173,8 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | File | Role |
 | --- | --- |
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
+| `cartograph-agent.js` | DOM-free agent planner: maps a repository question onto a deterministic graph walk (`buildAgentPlan`) and returns the steps, visited files, and every cited path |
+| `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`) plus the graph-derived benchmark cases (`buildBenchmarkCases`) |
 | `README.md` | This guide |
 
 Architectural rules that constrain this module live in

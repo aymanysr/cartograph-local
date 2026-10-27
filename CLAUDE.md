@@ -11,7 +11,7 @@ You are working on **Cartograph Local**, a deterministic codebase intelligence a
    - `hop2` (Transitive Dependents): `{ v | (v -> u) in edges for u in hop1 } - hop1 - {selected}`
    - `outbound` (Direct Imports): `{ w | (selected -> w) in edges }`
 4. **Visible Agent Tool Trace**: When answering a repository question, the agent must log each tool invocation (`tool`, `args`, `output`, `files`) in the step-by-step trace panel before emitting the final synthesis.
-5. **Shared Parser Rule**: All parsing lives in `lib/cartograph-parser.js`. `cartograph.html` and `cli/cartograph-scan.mjs` must load that module; never fork or duplicate parser logic. `parseRepository(files)` is the public seam used by tests.
+5. **Shared modules rule**: all parsing lives in `lib/cartograph-parser.js`, the agent planner in `lib/cartograph-agent.js`, and the eval scorer in `lib/cartograph-evals.js`. `cartograph.html` and `cli/cartograph-scan.mjs` must load those modules; never fork or duplicate that logic. `parseRepository(files)` is the public seam used by tests. The planner and scorer must stay DOM-free so Node tests run the same code the browser runs.
 
 ## 3. Communication & Decision Protocol
 - If an architectural ambiguity arises, do not guess silently and do not ask open-ended questions. Present a concrete **A or B choice** with a 1-sentence trade-off and your recommended default.

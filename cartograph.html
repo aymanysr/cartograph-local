@@ -7,6 +7,8 @@
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <script src="lib/cartograph-parser.js"></script>
+  <script src="lib/cartograph-agent.js"></script>
+  <script src="lib/cartograph-evals.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2139,186 +2141,11 @@ def create_app():
     }
 
     function buildDeterministicAgentPlan(question) {
-      const q = question.toLowerCase();
-      const nodes = state.graph.nodes;
-      const edges = state.graph.edges;
-      const steps = [];
-      const visitedFiles = new Set();
-      const activeEdges = new Set();
-
-      if (q.includes('auth') || q.includes('enforce') || q.includes('token') || q.includes('session') || q.includes('jwt') || q.includes('key')) {
-        const authNodes = nodes.filter(n =>
-          n.path.toLowerCase().includes('auth') ||
-          n.path.toLowerCase().includes('jwt') ||
-          n.path.toLowerCase().includes('hmac') ||
-          n.exports.some(e => e.toLowerCase().includes('auth') || e.toLowerCase().includes('verify') || e.toLowerCase().includes('token'))
-        );
-        const primaryAuth = authNodes[0] || nodes[0];
-        visitedFiles.add(primaryAuth.path);
-
-        steps.push({
-          tool: 'search_symbols',
-          args: `query="auth | requireAuth | verify"`,
-          output: `Matched ${authNodes.length} authentication module(s): ${authNodes.map(n => n.path).join(', ')}`,
-          files: authNodes.map(n => n.path)
-        });
-
-        steps.push({
-          tool: 'get_file_ast',
-          args: `path="${primaryAuth.path}"`,
-          output: `Exports: [${primaryAuth.exports.join(', ')}] • Outbound imports: [${primaryAuth.outboundEdges.map(e => e.target).join(', ') || 'none'}]`,
-          files: [primaryAuth.path, ...primaryAuth.outboundEdges.map(e => e.target)]
-        });
-
-        steps.push({
-          tool: 'walk_dependents',
-          args: `path="${primaryAuth.path}", depth=2`,
-          output: `1-Hop enforcement callers (${primaryAuth.hop1Files.length}): [${primaryAuth.hop1Files.join(', ')}] • 2-Hop upstream (${primaryAuth.hop2Files.length}): [${primaryAuth.hop2Files.join(', ')}]`,
-          files: [...primaryAuth.hop1Files, ...primaryAuth.hop2Files]
-        });
-
-        primaryAuth.hop1Files.forEach(f => {
-          visitedFiles.add(f);
-          activeEdges.add(`${f}->${primaryAuth.path}`);
-        });
-        primaryAuth.hop2Files.forEach(f => visitedFiles.add(f));
-        primaryAuth.outboundEdges.forEach(e => {
-          visitedFiles.add(e.target);
-          activeEdges.add(`${primaryAuth.path}->${e.target}`);
-        });
-
-        const hop1Chips = primaryAuth.hop1Files.map(makeFileChipHtml).join(', ') || 'no direct route callers';
-        const hop2Chips = primaryAuth.hop2Files.map(makeFileChipHtml).join(', ');
-        const answerHtml = `
-          Authentication is enforced in ${makeFileChipHtml(primaryAuth.path)}, which exports <code class="font-mono text-emerald-300">${primaryAuth.exports.join(', ')}</code>.
-          <br/><br/>
-          <strong>Step-by-step graph walk verification:</strong>
-          <ul class="list-disc pl-4 mt-1 space-y-1">
-            <li><strong>Direct Enforcement Callers (1-Hop):</strong> ${hop1Chips} directly import ${makeFileChipHtml(primaryAuth.path)} to guard incoming requests.</li>
-            ${primaryAuth.hop2Files.length ? `<li><strong>Upstream Consumers (2-Hops Out):</strong> ${hop2Chips} invoke those guarded routes.</li>` : ''}
-            ${primaryAuth.outboundEdges.length ? `<li><strong>Downstream Backing Store:</strong> ${makeFileChipHtml(primaryAuth.path)} connects to ${primaryAuth.outboundEdges.map(e => makeFileChipHtml(e.target)).join(', ')}.</li>` : ''}
-          </ul>
-        `;
-        return { steps, visitedFiles, activeEdges, answerHtml, primaryFocus: primaryAuth.path };
-      }
-
-      if (q.includes('break') || q.includes('db') || q.includes('database') || q.includes('supabase') || q.includes('ledger') || q.includes('vector') || q.includes('change')) {
-        const mentioned = nodes.find(n => q.includes(n.label.toLowerCase().replace(/\.[^.]+$/, '')));
-        const target = mentioned || [...nodes].sort((a, b) => b.totalImpact - a.totalImpact)[0];
-
-        visitedFiles.add(target.path);
-        target.hop1Files.forEach(f => {
-          visitedFiles.add(f);
-          activeEdges.add(`${f}->${target.path}`);
-        });
-        target.hop2Details.forEach(d => {
-          visitedFiles.add(d.file);
-          activeEdges.add(`${d.file}->${d.via}`);
-        });
-
-        steps.push({
-          tool: 'get_file_ast',
-          args: `path="${target.path}"`,
-          output: `Verified exports: [${target.exports.join(', ')}] (${target.loc} LOC)`,
-          files: [target.path]
-        });
-
-        steps.push({
-          tool: 'walk_dependents',
-          args: `path="${target.path}", depth=1`,
-          output: `Found ${target.hop1Files.length} direct 1-hop dependents: [${target.hop1Files.join(', ')}]`,
-          files: target.hop1Files
-        });
-
-        steps.push({
-          tool: 'walk_dependents',
-          args: `path="${target.path}", depth=2`,
-          output: `Found ${target.hop2Files.length} transitive 2-hop dependents: [${target.hop2Files.join(', ')}]`,
-          files: target.hop2Files
-        });
-
-        const answerHtml = `
-          Changing ${makeFileChipHtml(target.path)} (<code class="font-mono text-indigo-300">${target.exports.join(', ')}</code>) has a verified 2-level blast radius of <strong class="text-rose-300">${target.totalImpact} files</strong> (${Math.round((target.totalImpact / nodes.length) * 100)}% of the repository):
-          <ul class="list-disc pl-4 mt-1.5 space-y-1">
-            <li><strong class="text-rose-300">1-Hop Immediate Breakage (${target.hop1Files.length} files):</strong> ${target.hop1Files.map(makeFileChipHtml).join(' ') || 'None'} import ${makeFileChipHtml(target.path)} directly.</li>
-            <li><strong class="text-amber-300">2-Hop Cascading Breakage (${target.hop2Files.length} files):</strong> ${target.hop2Files.map(makeFileChipHtml).join(' ') || 'None'} depend on the 1-hop modules and will fail if return types or signatures shift.</li>
-          </ul>
-        `;
-        return { steps, visitedFiles, activeEdges, answerHtml, primaryFocus: target.path };
-      }
-
-      if (q.includes('circular') || q.includes('cycle') || q.includes('bottleneck') || q.includes('risk') || q.includes('single point')) {
-        const sortedByImpact = [...nodes].sort((a, b) => b.totalImpact - a.totalImpact);
-        const top1 = sortedByImpact[0];
-        const top2 = sortedByImpact[1] || top1;
-        visitedFiles.add(top1.path);
-        visitedFiles.add(top2.path);
-
-        steps.push({
-          tool: 'find_entry_points',
-          args: `scan_all=true`,
-          output: `Scanned ${nodes.length} nodes and ${edges.length} edges across architectural layers.`,
-          files: [top1.path, top2.path]
-        });
-
-        steps.push({
-          tool: 'detect_cycles_and_hubs',
-          args: `max_depth=3`,
-          output: `Circular dependencies: ${state.graph.cycles.length} • Top hub: ${top1.path} (${top1.totalImpact} dependents)`,
-          files: state.graph.cycles.length ? state.graph.cycles[0] : [top1.path]
-        });
-
-        const cycleText = state.graph.cycles.length > 0
-          ? `<strong class="text-rose-400">Circular Dependency Found:</strong> ${makeFileChipHtml(state.graph.cycles[0][0])} and ${makeFileChipHtml(state.graph.cycles[0][1])} form a closed import loop.`
-          : `<strong class="text-emerald-300">Zero Circular Dependencies:</strong> The repository forms a clean directed acyclic graph (DAG).`;
-
-        const answerHtml = `
-          ${cycleText}
-          <br/><br/>
-          <strong>Highest-Risk Architectural Bottlenecks (by 2-Hop Blast Radius):</strong>
-          <ul class="list-disc pl-4 mt-1 space-y-1">
-            <li>${makeFileChipHtml(top1.path)} — <strong class="text-rose-300">${top1.totalImpact} total dependents</strong> (${top1.hop1Files.length} direct, ${top1.hop2Files.length} transitive).</li>
-            <li>${makeFileChipHtml(top2.path)} — <strong class="text-amber-300">${top2.totalImpact} total dependents</strong> (${top2.hop1Files.length} direct, ${top2.hop2Files.length} transitive).</li>
-          </ul>
-        `;
-        return { steps, visitedFiles, activeEdges, answerHtml, primaryFocus: top1.path };
-      }
-
-      const parserNodes = nodes.filter(n => n.layer === 'parser' || n.layer === 'agent');
-      const uiNodes = nodes.filter(n => n.layer === 'ui' || n.layer === 'api');
-      const startNode = parserNodes[0] || nodes[0];
-      const endNode = uiNodes[0] || nodes[nodes.length - 1];
-
-      visitedFiles.add(startNode.path);
-      visitedFiles.add(endNode.path);
-      startNode.hop1Files.forEach(f => {
-        visitedFiles.add(f);
-        activeEdges.add(`${f}->${startNode.path}`);
-      });
-
-      steps.push({
-        tool: 'search_symbols',
-        args: `query="${question.slice(0, 32)}"`,
-        output: `Identified core modules ${startNode.path} and ${endNode.path}`,
-        files: [startNode.path, endNode.path]
-      });
-
-      steps.push({
-        tool: 'trace_dependency_path',
-        args: `from="${endNode.path}", to="${startNode.path}"`,
-        output: `Verified dependency chain across ${visitedFiles.size} connected modules.`,
-        files: Array.from(visitedFiles)
-      });
-
-      const answerHtml = `
-        Walking the parsed AST graph from the entry/UI layer (${makeFileChipHtml(endNode.path)}) down to the core engine (${makeFileChipHtml(startNode.path)}):
-        <ul class="list-disc pl-4 mt-1.5 space-y-1">
-          <li>${makeFileChipHtml(startNode.path)} exports <code class="font-mono text-indigo-300">${startNode.exports.join(', ')}</code>.</li>
-          <li>It connects upward through ${startNode.hop1Files.map(makeFileChipHtml).join(', ') || makeFileChipHtml(endNode.path)}.</li>
-          <li>All ${visitedFiles.size} highlighted nodes on the canvas were verified directly from parsed import statements.</li>
-        </ul>
-      `;
-      return { steps, visitedFiles, activeEdges, answerHtml, primaryFocus: startNode.path };
+      // Delegates to the shared DOM-free planner (lib/cartograph-agent.js),
+      // which is exercised by test/agent.test.js. Returns
+      // { steps, visitedFiles[], activeEdges[], answerHtml, primaryFocus,
+      //   citedFiles[] }.
+      return CartographAgent.buildAgentPlan(question, state.graph, makeFileChipHtml);
     }
 
     async function runAgentQuery(questionText) {
@@ -2328,8 +2155,8 @@ def create_app():
       const stream = document.getElementById('agentConversationStream');
       const plan = buildDeterministicAgentPlan(questionText.trim());
 
-      state.agentWalkedFiles = plan.visitedFiles;
-      state.agentActiveEdges = plan.activeEdges;
+      state.agentWalkedFiles = new Set(plan.visitedFiles);
+      state.agentActiveEdges = new Set(plan.activeEdges);
       if (plan.primaryFocus) {
         selectFileNode(plan.primaryFocus, false);
       }
@@ -2432,42 +2259,7 @@ def create_app():
     }
 
     function getEvalBenchmarkCases() {
-      const nodes = state.graph.nodes;
-      if (!nodes.length) return [];
-
-      const topHub = [...nodes].sort((a, b) => b.totalImpact - a.totalImpact)[0];
-      const authNode = nodes.find(n => n.path.includes('auth') || n.path.includes('jwt') || n.path.includes('hmac')) || nodes[0];
-      const parserNode = nodes.find(n => n.layer === 'parser') || nodes[Math.min(1, nodes.length - 1)];
-
-      return [
-        {
-          id: 'eval-1',
-          question: `What is the complete 2-hop blast radius if ${topHub.path} changes?`,
-          expectedFiles: [topHub.path, ...topHub.hop1Files, ...topHub.hop2Files],
-          strictCited: [topHub.path, ...topHub.hop1Files, ...topHub.hop2Files],
-          naiveCited: [topHub.path, ...(topHub.hop1Files.slice(0, 2)), 'src/lib/db/connection-pool.ts', 'src/services/legacy-cache.ts'],
-          strictAnswer: `AST traversal proved ${topHub.hop1Files.length} direct (1-hop) and ${topHub.hop2Files.length} transitive (2-hop) dependents (${topHub.totalImpact} total files).`,
-          naiveAnswer: `Changing ${topHub.path} will mainly affect src/lib/db/connection-pool.ts and src/services/legacy-cache.ts along with a couple of API routes.`
-        },
-        {
-          id: 'eval-2',
-          question: `Where is authentication enforced and which modules call it directly?`,
-          expectedFiles: [authNode.path, ...authNode.hop1Files],
-          strictCited: [authNode.path, ...authNode.hop1Files],
-          naiveCited: [authNode.path, 'src/middleware/session-cookie.ts'],
-          strictAnswer: `Verified ${authNode.path} exports [${authNode.exports.join(', ')}] and is directly imported by ${authNode.hop1Files.length} module(s): ${authNode.hop1Files.join(', ') || 'none'}.`,
-          naiveAnswer: `Authentication is handled via ${authNode.path} and src/middleware/session-cookie.ts across all endpoints.`
-        },
-        {
-          id: 'eval-3',
-          question: `Which internal modules does ${parserNode.path} import and who depends on it?`,
-          expectedFiles: [parserNode.path, ...parserNode.outboundEdges.map(e => e.target), ...parserNode.hop1Files],
-          strictCited: [parserNode.path, ...parserNode.outboundEdges.map(e => e.target), ...parserNode.hop1Files],
-          naiveCited: [parserNode.path, 'src/utils/file-reader.ts'],
-          strictAnswer: `Parsed imports at exact line numbers: imports [${parserNode.outboundEdges.map(e => e.target).join(', ') || 'none'}] and is imported by [${parserNode.hop1Files.join(', ') || 'none'}].`,
-          naiveAnswer: `${parserNode.path} reads files using src/utils/file-reader.ts and passes them to the UI.`
-        }
-      ];
+      return CartographEvals.buildBenchmarkCases(state.graph);
     }
 
     function setEvalPromptMode(mode) {
@@ -2481,69 +2273,95 @@ def create_app():
       renderEvalSuite();
     }
 
+    function evaluateEvalSuite() {
+      const graph = state.graph;
+      const isStrict = state.evalPromptMode === 'strict';
+      const cases = getEvalBenchmarkCases();
+      const plans = [];
+      const entries = cases.map((tc) => {
+        if (isStrict) {
+          const plan = CartographAgent.buildAgentPlan(tc.question, graph, makeFileChipHtml);
+          const result = CartographEvals.scoreCase({
+            graph,
+            expectedFiles: tc.expectedFiles,
+            citedFiles: plan.citedFiles,
+            traceFiles: CartographEvals.collectTraceFiles(plan),
+            requireProvenance: true,
+          });
+          plans.push(plan);
+          return { tc, plan, result };
+        }
+        const result = CartographEvals.scoreCase({
+          graph,
+          expectedFiles: tc.expectedFiles,
+          citedFiles: tc.naiveCited,
+          traceFiles: [],
+          requireProvenance: false,
+        });
+        return { tc, plan: null, result };
+      });
+      const summary = CartographEvals.computeSuiteSummary(
+        entries.map((e) => e.result),
+        plans
+      );
+      return { isStrict, cases, entries, summary };
+    }
+
     function runEvaluationSuite() {
+      const evaluation = evaluateEvalSuite();
+      state.evalSuiteSummary = evaluation.summary;
       renderEvalSuite();
-      const score = state.evalPromptMode === 'strict' ? '100.0%' : '41.7%';
-      showToast(`Benchmark suite complete — Groundedness Score: ${score}`);
+      showToast(`Benchmark suite complete \u2014 Groundedness ${evaluation.summary.groundednessScore.toFixed(1)}% \u2022 Recall ${evaluation.summary.recallScore.toFixed(1)}% \u2022 ${evaluation.summary.passCount}/${evaluation.summary.totalCases} cases PASS`);
     }
 
     function renderEvalSuite() {
-      const cases = getEvalBenchmarkCases();
-      const validPaths = new Set(state.graph.nodes.map(n => n.path));
-      const isStrict = state.evalPromptMode === 'strict';
+      const evaluation = evaluateEvalSuite();
+      const { isStrict, entries, summary } = evaluation;
 
-      let totalCited = 0;
-      let validCited = 0;
-      let hallucinatedCount = 0;
-      let totalExpected = 0;
-      let recalledCount = 0;
-
-      const rowsHtml = cases.map((tc, idx) => {
-        const cited = isStrict ? tc.strictCited : tc.naiveCited;
-        const answer = isStrict ? tc.strictAnswer : tc.naiveAnswer;
-
-        const hallucinated = cited.filter(f => !validPaths.has(f));
-        const recalled = tc.expectedFiles.filter(f => cited.includes(f));
-
-        totalCited += cited.length;
-        validCited += (cited.length - hallucinated.length);
-        hallucinatedCount += hallucinated.length;
-        totalExpected += tc.expectedFiles.length;
-        recalledCount += recalled.length;
-
-        const caseGroundedPct = cited.length ? Math.round(((cited.length - hallucinated.length) / cited.length) * 100) : 100;
-        const caseRecallPct = tc.expectedFiles.length ? Math.round((recalled.length / tc.expectedFiles.length) * 100) : 100;
-        const passed = hallucinated.length === 0 && caseRecallPct === 100;
+      const rowsHtml = entries.map(({ tc, plan, result }, idx) => {
+        const answerHtml = plan
+          ? plan.answerHtml
+          : `<div>${escapeHtml(tc.naiveAnswer)}</div>`;
+        const failureLabel = result.hallucinatedPaths.length > 0
+          ? 'HALLUCINATION DETECTED'
+          : result.unprovenPaths.length > 0 ? 'UNPROVEN CITATION DETECTED' : 'INCOMPLETE COVERAGE';
 
         return `
           <div class="p-4 space-y-3 hover:bg-slate-900/50">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded text-[10px] font-mono ${passed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">
-                  ${passed ? 'PASS • 100% GROUNDED' : 'FAIL • HALLUCINATION DETECTED'}
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono ${result.passed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">
+                  ${result.passed ? `PASS \u2022 ${result.groundednessScore.toFixed(1)}% GROUNDED` : `FAIL \u2022 ${failureLabel}`}
                 </span>
+                ${plan ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 border border-slate-700 text-slate-300">${plan.steps.length} real tool steps</span>` : ''}
                 <h3 class="text-xs font-bold text-white">Case #${idx + 1}: ${escapeHtml(tc.question)}</h3>
               </div>
               <div class="flex items-center gap-3 text-xs font-mono shrink-0">
-                <span class="${caseGroundedPct === 100 ? 'text-emerald-400' : 'text-rose-400'}">Grounded: ${caseGroundedPct}%</span>
-                <span class="${caseRecallPct === 100 ? 'text-indigo-300' : 'text-amber-400'}">Recall: ${caseRecallPct}%</span>
+                <span class="${result.groundednessScore >= 99.95 ? 'text-emerald-400' : 'text-rose-400'}">Grounded: ${result.groundednessScore.toFixed(1)}%</span>
+                <span class="${result.recallScore >= 99.95 ? 'text-indigo-300' : 'text-amber-400'}">Recall: ${result.recallScore.toFixed(1)}%</span>
               </div>
             </div>
 
             <div class="rounded-lg bg-slate-950 border border-slate-800 p-3 text-xs text-slate-300">
               <div class="text-[10px] font-mono uppercase text-slate-500 mb-1">Model Output Under Evaluation</div>
-              <div>${escapeHtml(answer)}</div>
+              <div class="agent-synthesis-body">${answerHtml}</div>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <div class="flex flex-wrap items-center gap-1">
                 <span class="text-slate-400 font-mono mr-1">Verified Citations:</span>
-                ${cited.filter(f => validPaths.has(f)).map(makeFileChipHtml).join('')}
+                ${result.citedFiles.filter(f => !result.hallucinatedPaths.includes(f) && !result.unprovenPaths.includes(f)).map(makeFileChipHtml).join('')}
               </div>
-              ${hallucinated.length > 0 ? `
+              ${result.hallucinatedPaths.length > 0 ? `
                 <div class="flex flex-wrap items-center gap-1">
                   <span class="text-rose-400 font-mono mr-1">Invented / Fake Paths Caught:</span>
-                  ${hallucinated.map(h => `<span class="px-2 py-0.5 rounded bg-rose-950 border border-rose-500/50 text-rose-300 font-mono text-[11px] line-through">${escapeHtml(h)}</span>`).join('')}
+                  ${result.hallucinatedPaths.map(h => `<span class="px-2 py-0.5 rounded bg-rose-950 border border-rose-500/50 text-rose-300 font-mono text-[11px] line-through">${escapeHtml(h)}</span>`).join('')}
+                </div>
+              ` : ''}
+              ${result.unprovenPaths.length > 0 ? `
+                <div class="flex flex-wrap items-center gap-1">
+                  <span class="text-amber-400 font-mono mr-1">Cited But Never Traced:</span>
+                  ${result.unprovenPaths.map(h => `<span class="px-2 py-0.5 rounded bg-amber-950 border border-amber-500/50 text-amber-300 font-mono text-[11px] line-through">${escapeHtml(h)}</span>`).join('')}
                 </div>
               ` : ''}
             </div>
@@ -2551,25 +2369,30 @@ def create_app():
         `;
       }).join('');
 
-      const overallGrounded = totalCited ? ((validCited / totalCited) * 100).toFixed(1) : '100.0';
-      const overallRecall = totalExpected ? ((recalledCount / totalExpected) * 100).toFixed(1) : '100.0';
-
       document.getElementById('evalCasesContainer').innerHTML = rowsHtml;
-      document.getElementById('evalScoreGroundedness').textContent = `${overallGrounded}%`;
-      document.getElementById('evalScoreGroundedness').className = isStrict ? 'text-2xl font-bold font-mono text-emerald-400 mt-1' : 'text-2xl font-bold font-mono text-rose-400 mt-1';
-      document.getElementById('evalScoreRecall').textContent = `${overallRecall}%`;
-      document.getElementById('evalScoreRecall').className = isStrict ? 'text-2xl font-bold font-mono text-indigo-400 mt-1' : 'text-2xl font-bold font-mono text-amber-400 mt-1';
-      document.getElementById('evalScoreHallucinations').textContent = String(hallucinatedCount);
-      document.getElementById('evalScoreHallucinations').className = hallucinatedCount === 0 ? 'text-2xl font-bold font-mono text-emerald-400 mt-1' : 'text-2xl font-bold font-mono text-rose-400 mt-1';
-      document.getElementById('evalScoreLatency').textContent = isStrict ? '3.0 steps' : '1 shot (blind)';
+      document.getElementById('evalScoreGroundedness').textContent = `${summary.groundednessScore.toFixed(1)}%`;
+      document.getElementById('evalScoreGroundedness').className = summary.groundednessScore >= 99.95
+        ? 'text-2xl font-bold font-mono text-emerald-400 mt-1'
+        : 'text-2xl font-bold font-mono text-rose-400 mt-1';
+      document.getElementById('evalScoreRecall').textContent = `${summary.recallScore.toFixed(1)}%`;
+      document.getElementById('evalScoreRecall').className = summary.recallScore >= 99.95
+        ? 'text-2xl font-bold font-mono text-indigo-400 mt-1'
+        : 'text-2xl font-bold font-mono text-amber-400 mt-1';
+      document.getElementById('evalScoreHallucinations').textContent = String(summary.hallucinatedCount);
+      document.getElementById('evalScoreHallucinations').className = summary.hallucinatedCount === 0
+        ? 'text-2xl font-bold font-mono text-emerald-400 mt-1'
+        : 'text-2xl font-bold font-mono text-rose-400 mt-1';
+      document.getElementById('evalScoreLatency').textContent = isStrict
+        ? `${summary.avgSteps.toFixed(1)} steps`
+        : '1 shot (blind)';
 
-      document.getElementById('headerEvalScoreBadge').textContent = `${Math.round(Number(overallGrounded))}%`;
-      document.getElementById('headerEvalScoreBadge').className = isStrict
+      document.getElementById('headerEvalScoreBadge').textContent = `${Math.round(summary.groundednessScore)}%`;
+      document.getElementById('headerEvalScoreBadge').className = summary.groundednessScore >= 99.95
         ? 'ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
         : 'ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30';
 
       document.getElementById('evalActiveModeTag').textContent = isStrict
-        ? 'Mode: AST-Constrained Graph Agent (100% Grounded)'
+        ? 'Mode: Grounded Graph Agent (Trace-Proven)'
         : 'Mode: Naive Unconstrained Prompt (Hallucinations Caught)';
       document.getElementById('evalActiveModeTag').className = isStrict
         ? 'px-2.5 py-1 rounded text-xs font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'

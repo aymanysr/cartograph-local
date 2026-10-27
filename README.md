@@ -12,7 +12,7 @@ Prerequisites: a modern browser, and Node.js 18+ for the CLI and tests (verified
 on Node 26). Run all commands from the repository root.
 
 ```bash
-node --test                    # expect: 11 tests passing
+node --test                    # expect: 29 tests passing (3 suites)
 node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json
 open cartograph.html           # macOS; or double-click the file
 ```
@@ -105,8 +105,8 @@ open cartograph.html           # macOS; or double-click the file
 | Parse pipeline | `parseRepositoryIntoGraph` → `applyParsedGraph` |
 | Graph rendering | `computeGraphNodePositions`, `renderCanvas`, `selectFileNode` |
 | Inspector and explanations | `renderInspectorPanel`, `buildGroundedModuleExplanationHtml` |
-| Agent planner and trace | `buildDeterministicAgentPlan`, `runAgentQuery` |
-| Evaluation suite | `runEvalSuite`, `renderEvalSuite` |
+| Agent planner and trace | `buildDeterministicAgentPlan` (delegates to `lib/cartograph-agent.js`), `runAgentQuery` |
+| Evaluation suite | `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |
 | Settings and loading | `openSettingsModal`, `ingestUploadedFileObjects` |
 
 Phase 02 and phase 03 specs describe the intended behavior of these areas.
@@ -119,7 +119,7 @@ Start here when you need the contract for one area rather than the whole app:
 | --- | --- | --- |
 | `lib/` | [lib/README.md](lib/README.md) | Parser API, graph schema, resolution rules, supported syntax, invariants |
 | `cli/` | [cli/README.md](cli/README.md) | Scan scope, flags, snapshot format, terminal report, local server routes |
-| `test/` | [test/README.md](test/README.md) | Parser/CLI tests, how to run or extend them, protected invariants |
+| `test/` | [test/README.md](test/README.md) | Parser, planner, and eval tests; how to run or extend them; protected invariants |
 | `specs/` | [specs/README.md](specs/README.md) | Phase requirements, implementation mapping, known spec-to-code gaps |
 
 ## Tests
