@@ -12,7 +12,7 @@ Prerequisites: a modern browser, and Node.js 18+ for the CLI and tests (verified
 on Node 26). Run all commands from the repository root.
 
 ```bash
-node --test                    # expect: 48 tests passing (3 suites)
+node --test                    # expect: 53 tests passing
 node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json
 open cartograph.html           # macOS; or double-click the file
 ```

@@ -165,6 +165,7 @@ function serveApp(port, payload) {
     ['/lib/cartograph-parser.js', path.resolve(__dirname, '..', 'lib', 'cartograph-parser.js')],
     ['/lib/cartograph-agent.js', path.resolve(__dirname, '..', 'lib', 'cartograph-agent.js')],
     ['/lib/cartograph-evals.js', path.resolve(__dirname, '..', 'lib', 'cartograph-evals.js')],
+    ['/lib/cartograph-fit.js', path.resolve(__dirname, '..', 'lib', 'cartograph-fit.js')],
   ]);
 
   const server = http.createServer((req, res) => {

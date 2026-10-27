@@ -9,6 +9,7 @@
   <script src="lib/cartograph-parser.js"></script>
   <script src="lib/cartograph-agent.js"></script>
   <script src="lib/cartograph-evals.js"></script>
+  <script src="lib/cartograph-fit.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1452,7 +1453,17 @@ def create_app():
         }
       }
 
-      state.camera = { x: 0, y: 0, zoom: 1 };
+      const worldBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      nodes.forEach((n) => {
+        worldBox.minX = Math.min(worldBox.minX, n.x ?? 0);
+        worldBox.minY = Math.min(worldBox.minY, n.y ?? 0);
+        worldBox.maxX = Math.max(worldBox.maxX, n.x ?? 0);
+        worldBox.maxY = Math.max(worldBox.maxY, n.y ?? 0);
+      });
+      state.camera = (typeof CartographFit === 'object' && CartographFit)
+        ? CartographFit.computeFitCamera(worldBox, width, height,
+            { top: 88, right: 40, bottom: 104, left: 40 })
+        : { x: 0, y: 0, zoom: 1 };
     }
 
     function getNodeVisualRole(nodePath) {
