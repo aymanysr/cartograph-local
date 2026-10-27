@@ -37,6 +37,7 @@ AI coding agents write thousands of lines of working code across dozens of files
      - `get_file_ast(path)`
      - `walk_dependents(path, depth=2)`
      - `trace_dependency_path(source, target)`
+     - `detect_cycles_and_hubs(max_depth=3)`
    - Works 100% locally using the built-in deterministic graph-walker, with optional 1-click connection to a local **Ollama** model (`http://localhost:11434`) or OpenAI-compatible API.
    - **Current implementation caveat:** the built-in agent routes questions to concrete call arguments over a deterministic handler registry (`CartographAgent.TOOLS`) and executes every call, so trace-step output/files are derived live from the graph; routing is keyword-based, so it remains a deterministic executor rather than an LLM-driven tool-calling loop. External LLM output cannot invent paths: the raw synthesis is validated (`CartographAgent.validateSynthesis`) against the parsed graph and the visible tool trace before it may replace the deterministic answer, and an ungrounded path keeps the deterministic synthesis and raises a rejection toast. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
 

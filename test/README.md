@@ -31,7 +31,7 @@ that naming pattern.
 
 ## Coverage
 
-Forty-five tests across three files, grouped by the behavior they lock down.
+Forty-eight tests across three files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -53,7 +53,7 @@ The CLI test is the only one that touches the filesystem. It creates a fixture
 under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written JSON
 snapshot, and removes the fixture in a `finally` block.
 
-`test/agent.test.js` (24 cases) — the DOM-free agent: a tool-handler registry
+`test/agent.test.js` (27 cases) — the DOM-free agent: a tool-handler registry
 (`CartographAgent.TOOLS`), the question router/executor, and the synthesis
 validator. Fixture graphs are built through `parseRepository`, so planner tests
 run the full public pipeline:
@@ -84,6 +84,9 @@ run the full public pipeline:
 | `find_entry_points returns the real zero-incoming nodes` | Files equal the graph-derived `inDegree === 0` set |
 | `detect_cycles_and_hubs finds real cycles and ranks real hubs` | A two-file cycle fixture triggers `Circular dependencies: 1` with cycle members traced; the acyclic fixture reports 0 and traces both ranked hubs |
 | `plan steps are produced by tool executes, not precomputed strings` | The same question against two different repositories yields graph-specific outputs (paths, counts, LOC) — step text cannot be literals |
+| `spec, docs, and UI copy never use the legacy tool spellings` | Reads `specs/phase-03-agent-evals.md`, `specs/README.md`, `PROJECT.md`, `README.md`, and `cartograph.html` and fails on any `trace_path` or bare `detect_cycles` (word-boundary aware — `_` keeps `detect_cycles_and_hubs` one token) |
+| `phase-03 spec lists every canonical handler name` | Every `TOOLS` registry key appears verbatim in the phase-03 spec |
+| `the UI AGENT_TOOLS sample lists every canonical handler name` | The demo `AGENT_TOOLS` sample block contains all six canonical names as string literals |
 
 `test/evals.test.js` (10 cases) — the trace-provenance eval scorer:
 
@@ -163,7 +166,7 @@ test('resolves a new edge case', () => {
 | File | Role |
 | --- | --- |
 | `parser.test.js` | Parser and CLI tests (11 cases) |
-| `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, and synthesis-validation tests (24 cases) |
+| `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, synthesis-validation, and cross-surface tool-name consistency tests (27 cases) |
 | `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
 | `README.md` | This guide |
 

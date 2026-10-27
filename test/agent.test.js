@@ -467,3 +467,67 @@ test('plan steps are produced by tool executes, not precomputed strings', () => 
   assert.ok(targetA.output.includes(SERVER));
   assert.ok(targetB.output.includes('src/lib/db/tunnel.ts'));
 });
+
+// ---------------------------------------------------------------------------
+// Ticket 05: one canonical tool-name spelling across spec, docs, and UI copy.
+// The registry keys in `TOOLS` are the canonical names; every user-facing
+// surface must agree (acceptance: a single spelling per tool across specs/,
+// PROJECT.md, and cartograph.html user-facing text).
+// ---------------------------------------------------------------------------
+
+const fs = require('node:fs');
+const nodePath = require('node:path');
+
+const REPO_ROOT = nodePath.join(__dirname, '..');
+const CANONICAL_TOOL_NAMES = Object.keys(TOOLS).sort();
+
+// `detect_cycles` is a substring of `detect_cycles_and_hubs`, so the legacy
+// matcher needs a word boundary that cannot sit inside the canonical name
+// (`_` keeps `detect_cycles_and_hubs` one word, making the lookahead a
+// belt-and-braces guard).
+const LEGACY_TOOL_NAME = /\btrace_path\b|\bdetect_cycles\b(?!_and_hubs)/;
+
+function readRepoFile(relativePath) {
+  return fs.readFileSync(nodePath.join(REPO_ROOT, relativePath), 'utf8');
+}
+
+function assertNoLegacyToolNames(source, fileLabel) {
+  const lines = source.split('\n');
+  lines.forEach((line, index) => {
+    assert.ok(
+      !LEGACY_TOOL_NAME.test(line),
+      `${fileLabel}:${index + 1} uses a legacy tool spelling: ${line.trim().slice(0, 90)}`
+    );
+  });
+}
+
+test('spec, docs, and UI copy never use the legacy tool spellings', () => {
+  assertNoLegacyToolNames(readRepoFile('specs/phase-03-agent-evals.md'), 'specs/phase-03-agent-evals.md');
+  assertNoLegacyToolNames(readRepoFile('specs/README.md'), 'specs/README.md');
+  assertNoLegacyToolNames(readRepoFile('PROJECT.md'), 'PROJECT.md');
+  assertNoLegacyToolNames(readRepoFile('README.md'), 'README.md');
+  assertNoLegacyToolNames(readRepoFile('cartograph.html'), 'cartograph.html');
+});
+
+test('phase-03 spec lists every canonical handler name', () => {
+  const spec = readRepoFile('specs/phase-03-agent-evals.md');
+  for (const name of CANONICAL_TOOL_NAMES) {
+    assert.ok(spec.includes(name), `phase-03 spec names the canonical tool ${name}`);
+  }
+});
+
+test('the UI AGENT_TOOLS sample lists every canonical handler name', () => {
+  const html = readRepoFile('cartograph.html');
+  const blockStart = html.indexOf('export const AGENT_TOOLS = [');
+  assert.ok(blockStart !== -1, 'the AGENT_TOOLS sample block exists');
+  const blockEnd = html.indexOf('] as const', blockStart);
+  assert.ok(blockEnd !== -1, 'the AGENT_TOOLS sample block is terminated');
+  const sampleBlock = html.slice(blockStart, blockEnd);
+
+  for (const name of CANONICAL_TOOL_NAMES) {
+    assert.ok(
+      sampleBlock.includes(`'${name}'`),
+      `AGENT_TOOLS sample lists the canonical tool ${name}`
+    );
+  }
+});

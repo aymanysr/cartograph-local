@@ -453,7 +453,7 @@
               <span class="text-xs font-semibold text-white">Cartograph Graph-Walking Agent</span>
             </div>
             <p class="text-xs text-slate-300 leading-relaxed">
-              Unlike a single-shot LLM prompt that guesses how your repository works, this agent executes a multi-step tool loop (<span class="font-mono text-emerald-300">search_symbols</span>, <span class="font-mono text-emerald-300">get_file_ast</span>, <span class="font-mono text-emerald-300">walk_dependents</span>, <span class="font-mono text-emerald-300">trace_path</span>) over the parsed AST graph and highlights every visited node on the canvas.
+              Unlike a single-shot LLM prompt that guesses how your repository works, this agent executes a multi-step tool loop (<span class="font-mono text-emerald-300">search_symbols</span>, <span class="font-mono text-emerald-300">get_file_ast</span>, <span class="font-mono text-emerald-300">walk_dependents</span>, <span class="font-mono text-emerald-300">trace_dependency_path</span>) over the parsed AST graph and highlights every visited node on the canvas.
             </p>
           </div>
 
@@ -902,7 +902,8 @@ export const AGENT_TOOLS = [
   'search_symbols',
   'get_file_ast',
   'walk_dependents',
-  'trace_dependency_path'
+  'trace_dependency_path',
+  'detect_cycles_and_hubs'
 ] as const;
 
 export async function executeGraphTool(orgId: string, repoId: string, toolName: string, args: Record<string, string>) {
