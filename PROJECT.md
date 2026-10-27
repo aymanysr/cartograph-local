@@ -9,17 +9,17 @@ AI coding agents write thousands of lines of working code across dozens of files
 ## The Golden Rule
 **Every line on the map comes from parsing real code.**
 - Connections are never guessed, inferred, or summarized by an LLM.
-- The AST/import parser proves the graph first (`nodes`, `edges`, `exports`, `imports`, `lineNumbers`).
+- The deterministic import/export parser proves the graph first. The top-level graph is `{ name, description, nodes, edges, cycles, unresolved }`; `exports` live on each node and `line`/`statement`/`specifier` live on each edge.
 - The AI is **only** allowed to explain or traverse edges that the parser has already proved exist.
 
 ## Core Capabilities
-1. **Local Repository Parser (Deterministic AST/Import Engine)**
+1. **Local Repository Parser (Deterministic Import/Export Engine)**
    - Parses TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`), Python (`.py`), and Go (`.go`) directly from local folders or via the local CLI scanner.
-   - Resolves relative imports (`./`, `../`), TypeScript path aliases (`@/`), barrel files (`index.ts`), dynamic `import()`, CommonJS `require()`, and Python `from ... import ...`.
+   - Resolves relative imports (`./`, `../`, and Python package-relative `.`/`..`), hard-coded aliases (`@/`, `~/`; no `tsconfig.json` path mapping), repo-relative `src/...` paths, barrel files (`index.ts`, `index.tsx`, `index.js`, `__init__.py`), dynamic `import()`, CommonJS `require()`, and Python `from ... import ...`.
    - Extracts exported symbols (functions, classes, types, interfaces, constants) and exact line numbers for every import edge.
 
 2. **Interactive Dependency Map & 2-Level Blast Radius**
-   - Visualizes every file as a node sized by its dependent count (in-degree) and colored by architectural layer (`app/routes`, `components`, `agent/ai`, `parser/core`, `db/lib`, `types/config`).
+   - Visualizes every file as a node sized by its 2-level impact (`totalImpact`: 1-hop + 2-hop dependents) and colored by architectural layer (`core` for db/config, `parser` for parser/ingest, `agent` for agent/evals, `api` for routes/auth/middleware, `ui` for components/hooks/entries).
    - Selecting any file immediately highlights:
      - **Selected File** (Indigo/Primary)
      - **Direct Dependents — 1 Hop Out** (Rose/Red): Files that directly import the selected file and will break immediately if its exports change.
@@ -27,7 +27,7 @@ AI coding agents write thousands of lines of working code across dozens of files
      - **Outbound Imports** (Cyan): Modules that the selected file depends on.
 
 3. **Grounded Module Explainer**
-   - Generates a concise architectural explanation of the selected module built strictly from the selected file's AST and its verified 1-hop neighbors.
+   - Generates a concise architectural explanation of the selected module built strictly from the selected file's parsed exports/imports and its verified 1-hop neighbors, with verified 2-hop dependents and cycle membership called out where relevant.
    - Every referenced file path is rendered as a clickable chip that selects and focuses that node on the graph.
 
 4. **Graph-Walking Codebase Agent ("Ask the Repository")**
@@ -38,12 +38,14 @@ AI coding agents write thousands of lines of working code across dozens of files
      - `walk_dependents(path, depth=2)`
      - `trace_dependency_path(source, target)`
    - Works 100% locally using the built-in deterministic graph-walker, with optional 1-click connection to a local **Ollama** model (`http://localhost:11434`) or OpenAI-compatible API.
+   - **Current implementation caveat:** the built-in agent is a keyword-routed planner that emits labeled, precomputed trace steps; it is not a generic executor over arbitrary tool arguments. External LLM output is not yet rejected for unknown paths after generation. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
 
 5. **Quantitative Agent Evals ("Catching the AI with a Number")**
    - Runs a golden dataset of repository questions against the agent and computes numerical scores for:
-     - **Citation Groundedness (%)**: Every file cited in the answer must exist in the parsed graph and have been inspected by a tool call.
-     - **Blast-Radius Recall (%)**: All 1-hop and 2-hop dependents must be accurately identified.
+     - **Citation Groundedness (%)**: `valid cited paths / total cited paths`. Every cited file must exist in the parsed graph and have been inspected by a tool call.
+     - **Blast-Radius Recall (%)**: `expected dependents cited / expected dependents`. All 1-hop and 2-hop dependents must be accurately identified.
      - **Zero Hallucinated Edges**: Any invented file path or unverified connection drops the score to 0.
+   - **Current implementation caveat:** the Evals tab scores pre-authored citation lists; it does not execute the agent per case, and it checks graph existence rather than tool-trace provenance. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
 
 ## Things We Refuse To Do (And Why)
 - **No "Code Quality Grades" or arbitrary 1–10 health scores**: LLMs invent subjective numbers that mean nothing across runs. Only report deterministic metrics (in-degree, out-degree, 2-hop blast radius count, circular dependency cycles).

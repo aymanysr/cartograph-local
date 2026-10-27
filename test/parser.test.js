@@ -185,10 +185,17 @@ test('parseRepository resolves aliases, tracks unresolved imports, and computes 
 
 test('parseRepository resolves Python imports plus dynamic and CommonJS imports', () => {
   const files = [
-    { path: 'app/db/vector_store.py', content: 'class VectorStore:\n    pass\n\nvector_db = VectorStore()' },
+    {
+      path: 'app/db/vector_store.py',
+      content: 'class VectorStore:\n    pass\n\nclass _Private:\n    pass\n\nvector_db = VectorStore()',
+    },
     {
       path: 'app/api/routes_query.py',
       content: 'from app.db.vector_store import vector_db\n\ndef post_query():\n    return vector_db',
+    },
+    {
+      path: 'app/api/relative.py',
+      content: 'from .models import Model\n\ndef use_model():\n    return Model',
     },
     { path: 'src/lazy.ts', content: 'export const lazy = 1;' },
     { path: 'src/legacy.ts', content: 'module.exports = {};' },
@@ -222,6 +229,16 @@ test('parseRepository resolves Python imports plus dynamic and CommonJS imports'
   );
   assert.ok(requireEdge, 'CommonJS require() resolves');
   assert.equal(requireEdge.line, 2);
+
+  const relativeUnresolved = graph.unresolved.find(
+    (item) => item.source === 'app/api/relative.py' && item.specifier === '.models'
+  );
+  assert.ok(relativeUnresolved, 'Python relative import is tracked when it cannot resolve');
+  assert.equal(relativeUnresolved.kind, 'internal-unresolved');
+
+  const storeNode = graph.nodes.find((node) => node.path === 'app/db/vector_store.py');
+  assert.ok(storeNode.exports.includes('VectorStore'));
+  assert.ok(!storeNode.exports.includes('_Private'), 'private Python classes are not exports');
 });
 
 test('parseRepository applies the 1-hop / 2-hop blast radius definition exactly', () => {
@@ -276,6 +293,42 @@ test('parseRepository ignores import-like text embedded in string literals', () 
     0,
     'quoted code samples are not reported as unresolved imports'
   );
+});
+
+test('parseRepository ignores import-like text in block comments and multiline templates', () => {
+  const files = [
+    { path: 'src/real.ts', content: 'export const real = 1;' },
+    {
+      path: 'src/commented.ts',
+      content: ["/* import { real } from './real'; */", 'export const commented = 1;'].join('\n'),
+    },
+    {
+      path: 'src/multiline.ts',
+      content: ["const sample = `", "import { real } from './real';", '`;', 'export const multiline = sample;'].join('\n'),
+    },
+  ];
+
+  const graph = parseRepository(files, { repoName: 'comment-fixture' });
+
+  assert.equal(graph.edges.filter((edge) => edge.source === 'src/commented.ts').length, 0);
+  assert.equal(graph.edges.filter((edge) => edge.source === 'src/multiline.ts').length, 0);
+});
+
+test('parseRepository extracts named and default exports', () => {
+  const files = [
+    { path: 'src/default-fn.ts', content: 'export default function handler() {}' },
+    { path: 'src/default-class.ts', content: 'export default class Widget {}' },
+    { path: 'src/default-ident.ts', content: 'const thing = 1;\nexport default thing;' },
+    { path: 'src/default-anon.ts', content: 'export default () => 1;' },
+  ];
+
+  const graph = parseRepository(files, { repoName: 'exports-fixture' });
+  const exportsFor = (filePath) => graph.nodes.find((node) => node.path === filePath).exports;
+
+  assert.ok(exportsFor('src/default-fn.ts').includes('handler()'));
+  assert.ok(exportsFor('src/default-class.ts').includes('Widget'));
+  assert.ok(exportsFor('src/default-ident.ts').includes('thing'));
+  assert.ok(exportsFor('src/default-anon.ts').includes('default'));
 });
 
 test('CLI scans a folder into a parsed graph and prints a blast-radius report', () => {

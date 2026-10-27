@@ -88,13 +88,13 @@ function parseArgs(argv) {
   return args;
 }
 
-function printBlastRadiusReport(graph, focusFile) {
+function printBlastRadiusReport(graph, focusFile, topN = 10) {
   const ranked = [...graph.nodes].sort(
     (a, b) => b.totalImpact - a.totalImpact || b.inDegree - a.inDegree || a.path.localeCompare(b.path)
   );
 
   console.log('\nTop blast-radius hotspots:');
-  const top = ranked.slice(0, Math.min(10, ranked.length));
+  const top = ranked.slice(0, Math.min(topN, ranked.length));
   if (top.length === 0) {
     console.log('  (no files scanned)');
   }
@@ -221,7 +221,7 @@ function main() {
   );
   console.log(`[Cartograph CLI] Snapshot written to ${outPath}`);
 
-  printBlastRadiusReport(graph, args.focusFile);
+  printBlastRadiusReport(graph, args.focusFile, args.top);
 
   console.log(
     `\n[Cartograph CLI] Tip: drag-and-drop ${path.basename(outPath)} into cartograph.html, ` +

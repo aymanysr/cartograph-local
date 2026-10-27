@@ -10,7 +10,7 @@ You are working on **Cartograph Local**, a deterministic codebase intelligence a
    - `hop1` (Direct Dependents): `{ u | (u -> selected) in edges }`
    - `hop2` (Transitive Dependents): `{ v | (v -> u) in edges for u in hop1 } - hop1 - {selected}`
    - `outbound` (Direct Imports): `{ w | (selected -> w) in edges }`
-4. **Visible Agent Tool Trace**: When answering a repository question, the agent must log each tool invocation (`tool`, `args`, `resultSummary`, `verifiedFiles`) in the step-by-step trace panel before emitting the final synthesis.
+4. **Visible Agent Tool Trace**: When answering a repository question, the agent must log each tool invocation (`tool`, `args`, `output`, `files`) in the step-by-step trace panel before emitting the final synthesis.
 5. **Shared Parser Rule**: All parsing lives in `lib/cartograph-parser.js`. `cartograph.html` and `cli/cartograph-scan.mjs` must load that module; never fork or duplicate parser logic. `parseRepository(files)` is the public seam used by tests.
 
 ## 3. Communication & Decision Protocol

@@ -1886,7 +1886,7 @@ def create_app():
 
     function makeFileChipHtml(filePath) {
       const shortName = filePath.split('/').pop();
-      return `<button type="button" onclick="selectFileNode('${filePath}', true)" class="file-chip" title="${filePath}">${shortName}</button>`;
+      return `<button type="button" data-filepath="${escapeHtml(filePath)}" onclick="selectFileNode('${filePath}', true)" class="file-chip" title="${filePath}">${shortName}</button>`;
     }
 
     function updateHeaderMetrics() {
