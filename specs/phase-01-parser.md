@@ -16,5 +16,5 @@ Turn a raw collection of repository files into a verified, queryable directed gr
    - `outDegree` (direct imports count)
    - `hop1Files` (1-hop breakage set)
    - `hop2Files` (2-hop transitive breakage set)
-   - `cycles` (circular dependency loops detected via DFS-based Tarjan SCC)
+   - `cycles` (circular dependency loops detected via Tarjan's DFS-based — depth-first search — strongly-connected-component detection)
 5. Record every unresolved module specifier in `graph.unresolved` with source file, line, specifier, and classification (`internal-unresolved` vs `external-package`) so resolution accuracy can be inspected.

@@ -12,7 +12,7 @@ Prerequisites: a modern browser, and Node.js 18+ for the CLI and tests (verified
 on Node 26). Run all commands from the repository root.
 
 ```bash
-node --test                    # expect: 29 tests passing (3 suites)
+node --test                    # expect: 48 tests passing (3 suites)
 node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json
 open cartograph.html           # macOS; or double-click the file
 ```
@@ -21,7 +21,7 @@ open cartograph.html           # macOS; or double-click the file
 
 1. **Open the app directly**
    Double-click `cartograph.html`, or open it from the repository root. It loads
-   `lib/cartograph-parser.js` from the `lib/` folder, so keep the repository
+   the three shared modules from the `lib/` folder, so keep the repository
    layout intact.
 2. **Load a repository**
    - Click **"Open Local Folder"** in the top bar and choose a project directory
@@ -67,6 +67,16 @@ open cartograph.html           # macOS; or double-click the file
   that re-exports a directory's modules; imports resolve through it.
 - **Grounded** — every cited file path exists in the parsed graph (and, for the
   eval suite, should have appeared in a tool trace).
+- **Chip / badge** — two names for the same thing: a clickable file pill in
+  agent answers and explanations (marked with a `data-filepath="..."`
+  attribute); clicking it selects that file on the canvas.
+- **Rejection toast** — the on-screen warning when the LLM's synthesis is
+  rejected for naming paths outside the graph or the tool trace; it names the
+  ungrounded paths and the deterministic answer stays.
+- **Provenance** — evidence that a cited file actually appeared in the visible
+  agent tool trace, not merely in the graph; strict eval mode requires it.
+- **AST** — "abstract syntax tree"; here it is legacy branding only (see the
+  architecture note below).
 - **Snapshot** — the JSON file written by the CLI: `{ name, scannedAt, graph }`.
 
 ## Architecture
@@ -87,13 +97,21 @@ open cartograph.html           # macOS; or double-click the file
 ## Project Structure
 
 - [`cartograph.html`](cartograph.html) — single-page Codebase Intelligence app
-  (loads `lib/cartograph-parser.js`).
+  (loads the three `lib/` modules).
 - [`lib/cartograph-parser.js`](lib/cartograph-parser.js) — shared standalone
   deterministic parser (browser + Node).
+- [`lib/cartograph-agent.js`](lib/cartograph-agent.js) — deterministic agent
+  tool executor and LLM-output validation gate (browser + Node).
+- [`lib/cartograph-evals.js`](lib/cartograph-evals.js) — groundedness/recall
+  eval scorer and graph-derived benchmark cases (browser + Node).
 - [`cli/cartograph-scan.mjs`](cli/cartograph-scan.mjs) — zero-dependency Node.js
   CLI scanner, report, and local server.
 - [`test/parser.test.js`](test/parser.test.js) — `node:test` suite for parser
   resolution, cycles, and blast radius.
+- [`test/agent.test.js`](test/agent.test.js) — `node:test` suite for agent
+  tool handlers, routing, and validation.
+- [`test/evals.test.js`](test/evals.test.js) — `node:test` suite for the eval
+  scorer.
 - [`PROJECT.md`](PROJECT.md) — product brief, golden rules, and anti-goals.
 - [`CLAUDE.md`](CLAUDE.md) — agent governance rules and invariants.
 - [`specs/`](specs/) — phase-by-phase engineering specifications.
@@ -106,7 +124,7 @@ open cartograph.html           # macOS; or double-click the file
 | --- | --- |
 | App state | `state` object (graph, selection, agent config) |
 | Parse pipeline | `parseRepositoryIntoGraph` → `applyParsedGraph` |
-| Graph rendering | `computeGraphNodePositions`, `renderCanvas`, `selectFileNode` |
+| Graph rendering | `computeGraphNodePositions`, `drawDependencyGraph`, `selectFileNode` |
 | Inspector and explanations | `renderInspectorPanel`, `buildGroundedModuleExplanationHtml` |
 | Agent tool executor and trace | `buildDeterministicAgentPlan` (routes through `lib/cartograph-agent.js` `TOOLS` registry), `runAgentQuery` |
 | Evaluation suite | `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |

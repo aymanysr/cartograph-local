@@ -22,6 +22,6 @@ Owner: agent · Status: done · Blocked by: 01 (needs real agent runs to ground 
 ## Outcome
 
 - Shipped in `lib/cartograph-evals.js`: `scoreCase`, `collectTraceFiles`, `computeSuiteSummary`, `buildBenchmarkCases` — all DOM-free, no regex guessery at call sites, exact PASS rule (`0 hallucinated ∧ 0 unproven ∧ exact recall`).
-- `renderEvalSuite` now runs the agent per case (strict) and renders per-case real numbers, real tool steps, untraced-citation callouts, and value-colored cards (no hardcoded `100.0%` / `41.7%` / `3.0 steps` strings).
+- `renderEvalSuite` now runs the agent per case (strict) and renders per-case real numbers, real tool steps, untraced-citation callouts, and value-colored cards — rendered output contains no hardcoded scores (the initial HTML markup does ship placeholder strings `100.0%` etc., overwritten at load).
 - Toast reports the real summary (`Run Full Benchmark Suite`).
 - Verified: `test/evals.test.js` (10 cases) green, including the cited-but-untraced 50% provenance case; headless-Chrome strict run on the self-scan graph shows `100.0% / 100.0% / 0 / 3.7 steps` with all 3 cases PASS.

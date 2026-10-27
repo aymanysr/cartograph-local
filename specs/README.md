@@ -20,7 +20,7 @@ Record the conflict instead of silently coding around it.
 | --- | --- | --- | --- |
 | [`phase-01-parser.md`](phase-01-parser.md) | Deterministic import/export graph | `lib/cartograph-parser.js`, `cli/cartograph-scan.mjs` | `node --test` |
 | [`phase-02-graph-ui.md`](phase-02-graph-ui.md) | Interactive map, blast radius, grounded explainer | `cartograph.html` | Manual browser checks |
-| [`phase-03-agent-evals.md`](phase-03-agent-evals.md) | Graph-walking agent and quantitative evals | `cartograph.html` | Manual agent and Evals tabs |
+| [`phase-03-agent-evals.md`](phase-03-agent-evals.md) | Graph-walking agent and quantitative evals | `cartograph.html` + `lib/cartograph-agent.js` + `lib/cartograph-evals.js` | Manual agent and Evals tabs |
 
 ## Phase summaries
 
@@ -53,7 +53,7 @@ The implementation and exact graph schema live in
 Required behavior:
 
 - Canvas graph with pan, zoom, node dragging, architectural layer coloring, and
-  both hierarchical DAG and force-directed layouts.
+  both hierarchical DAG (directed acyclic graph) and force-directed layouts.
 - Selection highlighting: selected node, 1-hop dependents, 2-hop transitive
   dependents, and outbound imports in distinct colors.
 - Inspector lists the exact affected files with line numbers and import
@@ -89,8 +89,8 @@ requests to change code.
 | Area | Spec or product claim | Current code |
 | --- | --- | --- |
 | Parser model | The parser is deterministic and line-oriented | `lib/cartograph-parser.js` is a line-oriented regex scanner with quote/comment masking; it builds no AST, while the app UI still uses "AST" branding |
-| Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan SCC (DFS-based); self-imports are dropped before cycle detection |
-| Agent loop | Phase 03 describes a tool-calling loop | The agent routes questions to concrete call arguments over the `CartographAgent.TOOLS` handler registry and executes them — every trace step's output/files is derived live from the graph (ticket 04). Routing stays keyword-based, so it is still not an LLM-driven tool-calling loop |
+| Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan's DFS-based (depth-first search) strongly-connected-component algorithm; self-imports are dropped before cycle detection |
+| Agent loop | Phase 03 describes a tool-calling loop | The agent routes questions to concrete call arguments over the `CartographAgent.TOOLS` handler registry and executes them — every trace step's output/files is derived live from the graph (see the ticket-04 outcome notes: [`../.scratch/agent-grounding/issues/04-tool-executor.md`](../.scratch/agent-grounding/issues/04-tool-executor.md)). Routing stays keyword-based, so it is still not an LLM-driven tool-calling loop |
 | Hallucination metric | Phase 03 describes a Hallucination Rate | The UI displays a hallucinated-path count (`evalScoreHallucinations`), not a percentage |
 
 ## Invariants

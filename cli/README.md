@@ -26,7 +26,10 @@ arguments are supplied, the last one wins.
 | `--serve [port]` | `4173` | Starts the local UI server after writing the snapshot. `--serve` alone uses port 4173 |
 
 There is no `--help` flag; unrecognized flags have no effect, and a following
-non-flag argument is treated as `targetDir`. `--out` overwrites an existing file.
+non-flag argument is treated as `targetDir`. Non-numeric values are tolerated:
+`--top 0` (or a negative value) silently keeps the default `10`, and a
+non-numeric `--serve` value falls back to port `4173` while the bare value is
+still treated as `targetDir`. `--out` overwrites an existing file.
 A missing target directory throws from `fs.readdirSync`; a busy `--serve` port
 fails with Node's `EADDRINUSE`. Run the commands below for the supported surface.
 
@@ -93,19 +96,34 @@ After writing the snapshot, the CLI prints:
    and statement, every 2-hop file with the file it came through, and every
    outbound import.
 
-A scan of this repository at the time of writing reports `lib/cartograph-parser.js`
-as the only file with dependents: `cli/cartograph-scan.mjs` and
-`test/parser.test.js`. `cartograph.html` does not appear because HTML is outside
-the scan scope. Treat this as an example snapshot, not a permanent invariant.
+A scan of this repository at the time of writing reports
+`lib/cartograph-parser.js` as the top hotspot, with four direct dependents:
+`cli/cartograph-scan.mjs` and the three `test/*.test.js` files.
+`lib/cartograph-agent.js` follows with three. `cartograph.html` does not appear
+because HTML is outside the scan scope. Treat the excerpt below as an example
+snapshot, not a permanent invariant — adding or removing source files changes
+the counts it prints.
 
 Sample report excerpt:
 
 ```text
-[Cartograph CLI] Scanned 4 files -> 4 nodes, 2 edges (0 cycles, 10 unresolved imports)
+[Cartograph CLI] Scanning repository: /path/to/checkout
+[Cartograph CLI] Scanned 8 files -> 8 nodes, 10 edges (0 cycles, 16 unresolved imports)
+[Cartograph CLI] Snapshot written to cartograph-snapshot.json
+
 Top blast-radius hotspots:
-   1. lib/cartograph-parser.js — 2 affected (2 direct, 0 two-hop)
+   1. lib/cartograph-parser.js — 4 affected (4 direct, 0 two-hop)
+   2. lib/cartograph-agent.js — 3 affected (3 direct, 0 two-hop)
+   3. lib/cartograph-evals.js — 1 affected (1 direct, 0 two-hop)
+   4. cli/cartograph-scan.mjs — 0 affected (0 direct, 0 two-hop)
+   5. package.json — 0 affected (0 direct, 0 two-hop)
+   6. test/agent.test.js — 0 affected (0 direct, 0 two-hop)
+   7. test/evals.test.js — 0 affected (0 direct, 0 two-hop)
+   8. test/parser.test.js — 0 affected (0 direct, 0 two-hop)
+
 Circular dependencies: none
-Unresolved imports: 10 external package(s), 0 internal
+
+Unresolved imports: 16 external package(s), 0 internal
 ```
 
 ## Local server
@@ -117,11 +135,13 @@ until interrupted.
 | --- | --- |
 | `/` and `/cartograph.html` | `cartograph.html` from the repository root |
 | `/lib/cartograph-parser.js` | The shared parser, served as JavaScript |
+| `/lib/cartograph-agent.js` | The agent module, served as JavaScript |
+| `/lib/cartograph-evals.js` | The eval scorer module, served as JavaScript |
 | `/api/local-repo` | The just-scanned `{ name, scannedAt, graph }` payload as JSON |
 | `/favicon.ico` | `204 No Content` |
 | Anything else | `404 Not found` |
 
-The HTML, parser, and JSON responses use `Cache-Control: no-store`.
+The HTML, the lib modules, and the JSON response use `Cache-Control: no-store`.
 
 ```bash
 node cli/cartograph-scan.mjs /path/to/repo --serve 4173

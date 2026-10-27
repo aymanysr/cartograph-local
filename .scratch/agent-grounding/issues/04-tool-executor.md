@@ -31,4 +31,4 @@ Split the keyword-routed planner into real agents with a discovered handler regi
 
 ## Remaining notes
 
-- Ticket 05 (tool-name alignment) is still open: `trace_path` vs `trace_dependency_path` and the legacy step labels.
+- At the time of ticket 04 landing, ticket 05 (tool-name alignment) was still open; it is done now — see its outcome notes.

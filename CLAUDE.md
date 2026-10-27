@@ -1,12 +1,12 @@
 # CLAUDE.md — Agent Governance & Engineering Rules
 
 ## 1. Role & Operating Mode
-You are working on **Cartograph Local**, a deterministic codebase intelligence application. Before writing or modifying any code, read `PROJECT.md` and the active phase spec in `specs/`.
+You are working on **Cartograph Local**, a deterministic codebase intelligence application. Before writing or modifying any code, read `PROJECT.md` and the phase spec in `specs/` matching the area you are touching — phases 01–03 are all implemented; the index with per-phase implementation notes lives in `specs/README.md`.
 
 ## 2. Non-Negotiable Architecture Invariants
 1. **Parser Standalone Rule**: The code parser (`parseRepository` / `cli/cartograph-scan.mjs`) must remain 100% standalone and deterministic. It must never call an LLM or external network service to construct the dependency graph.
 2. **Strict Grounding Contract**: Any explanation or agent response shown in the UI must only reference file paths that exist in `state.graph.nodes`. Every mentioned file path must be rendered as an interactive badge (`data-filepath="..."`) so the user can click it to verify.
-3. **2-Hop Blast Radius Definition**:
+3. **2-Hop Blast Radius Definition** (plain-English gloss for this set-builder notation lives in the root [`README.md`](README.md#glossary)):
    - `hop1` (Direct Dependents): `{ u | (u -> selected) in edges }`
    - `hop2` (Transitive Dependents): `{ v | (v -> u) in edges for u in hop1 } - hop1 - {selected}`
    - `outbound` (Direct Imports): `{ w | (selected -> w) in edges }`

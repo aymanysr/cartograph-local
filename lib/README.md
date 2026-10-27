@@ -21,7 +21,7 @@ under Node and attaches `CartographParser` to `globalThis` in the browser.
 | --- | --- | --- |
 | Browser | `<script src="lib/cartograph-parser.js"></script>` | `window.CartographParser` |
 | Node CommonJS | `const CartographParser = require('./lib/cartograph-parser.js');` | module object |
-| Node ESM | `import CartographParser from './lib/cartograph-parser.js';` | default export |
+| Node ES module (ESM) | `import CartographParser from './lib/cartograph-parser.js';` | default export |
 
 ## Public API
 
@@ -98,8 +98,11 @@ Unresolved imports never become edges.
   the selected node and all 1-hop nodes.
 - **Outbound** = edges sourced from the selected node, excluding self-imports.
 - **Cycles** come from Tarjan strongly connected components (SCCs) with more than
-  one member. Self-imports are dropped, so the public graph contains no
-  single-node cycles. Cycle arrays contain file paths, not edge objects.
+  one member. Self-imports are dropped at edge-creation time — they never become
+  edges in `parseRepository` output, so the public graph contains no single-node
+  cycles (though `detectCircularDependencies(nodes, edges)` itself will report a
+  self-loop edge handed to it directly as a `[p, p]` cycle). Cycle arrays contain
+  file paths, not edge objects.
 - **Every node has at least one export label.** If the scanner finds no explicit
   export, it falls back to the filename stem. That label is a display fallback,
   not evidence of a real export.
@@ -174,8 +177,17 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | --- | --- |
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
 | `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
-| `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`) plus the graph-derived benchmark cases (`buildBenchmarkCases`) |
+| `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
 | `README.md` | This guide |
+
+Eval scorer contract for `cartograph-evals.js` (all exports are DOM-free):
+
+| Export | Contract |
+| --- | --- |
+| `buildBenchmarkCases(graph)` | Derives benchmark cases (question, expected files, naive decoys) from graph metrics — no hand-written ground truth |
+| `collectTraceFiles(plan)` | Unions every trace step's `files` in order, deduped — the provenance set |
+| `scoreCase({ graph, citedFiles, expectedFiles, traceFiles, requireProvenance })` | Returns `{ citedFiles, hallucinatedPaths, unprovenPaths, groundedCount, totalCited, recalledCount, totalExpected, groundednessScore, recallScore, passed }`. Hallucinated = cited path missing from the graph; unproven = cited, in-graph, but absent from `traceFiles` when `requireProvenance` is true; groundedness% = grounded / cited (0 cited → 100); recall% = \|expected ∩ cited\| / \|expected\| (0 expected → 100); `passed` = 0 hallucinated ∧ 0 unproven ∧ recall exactly 100 |
+| `computeSuiteSummary(perCase, plans)` | Aggregates overall groundedness/recall percentages and a 1-decimal average step count |
 
 Architectural rules that constrain this module live in
 [`../PROJECT.md`](../PROJECT.md) and [`../CLAUDE.md`](../CLAUDE.md). Phase

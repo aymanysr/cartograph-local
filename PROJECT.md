@@ -36,7 +36,7 @@ AI coding agents write thousands of lines of working code across dozens of files
      - `search_symbols(query)`
      - `get_file_ast(path)`
      - `walk_dependents(path, depth=2)`
-     - `trace_dependency_path(source, target)`
+     - `trace_dependency_path(from, to)`
      - `detect_cycles_and_hubs(max_depth=3)`
    - Works 100% locally using the built-in deterministic graph-walker, with optional 1-click connection to a local **Ollama** model (`http://localhost:11434`) or OpenAI-compatible API.
    - **Current implementation caveat:** the built-in agent routes questions to concrete call arguments over a deterministic handler registry (`CartographAgent.TOOLS`) and executes every call, so trace-step output/files are derived live from the graph; routing is keyword-based, so it remains a deterministic executor rather than an LLM-driven tool-calling loop. External LLM output cannot invent paths: the raw synthesis is validated (`CartographAgent.validateSynthesis`) against the parsed graph and the visible tool trace before it may replace the deterministic answer, and an ungrounded path keeps the deterministic synthesis and raises a rejection toast. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
@@ -44,7 +44,7 @@ AI coding agents write thousands of lines of working code across dozens of files
 5. **Quantitative Agent Evals ("Catching the AI with a Number")**
    - Runs a golden dataset of repository questions against the deterministic agent and computes numerical scores for:
      - **Citation Groundedness (%)**: `valid cited paths / total cited paths`. A citation is valid only if the path exists in the parsed graph **and** appeared in the agent's tool trace (strict mode). Naive/blind mode grounds by graph existence only, so it catches invented paths but cannot prove provenance.
-     - **Blast-Radius Recall (%)**: `expected dependents cited / expected dependents`. All 1-hop and 2-hop dependents must be accurately identified.
+     - **Blast-Radius Recall (%)**: `|expected ∩ cited| / |expected|`. The case's full ground-truth set must be accurately cited — the changed node plus its 1-hop and 2-hop dependents (and outbound imports where the case declares them).
      - **Zero Hallucinated Paths**: Any invented file path drops the score.
    - Strict mode executes the agent per case and shows each case's real tool-step count; scoring lives in the shared, DOM-free `lib/cartograph-evals.js` (see [`lib/README.md`](lib/README.md)).
 

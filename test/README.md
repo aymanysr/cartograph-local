@@ -49,9 +49,12 @@ Forty-eight tests across three files, grouped by the behavior they lock down.
 | `parseRepository extracts named and default exports` | Default function, default class, default identifier, and anonymous default forms all surface in `node.exports` |
 | `CLI scans a folder into a parsed graph and prints a blast-radius report` | A temporary directory is scanned through `cli/cartograph-scan.mjs`; the snapshot has the expected edge, `inDegree`, and `hop1Files`; stdout contains the hotspot report |
 
-The CLI test is the only one that touches the filesystem. It creates a fixture
-under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written JSON
-snapshot, and removes the fixture in a `finally` block.
+Most tests treat the repository as pure data. The CLI test writes: it creates a
+fixture under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written
+JSON snapshot, and removes the fixture in a `finally` block. Three agent tests
+also read repository files — read-only — to keep the tool-name alignment locked
+(they scan `specs/`, `PROJECT.md`, `README.md`, and `cartograph.html` for the
+canonical tool spellings).
 
 `test/agent.test.js` (27 cases) — the DOM-free agent: a tool-handler registry
 (`CartographAgent.TOOLS`), the question router/executor, and the synthesis
@@ -78,9 +81,9 @@ run the full public pipeline:
 | `validateSynthesis tolerates empty text and an empty graph` | Empty text is accepted; an empty graph makes any invented path `unknownPaths` and the answer rejected |
 | `TOOLS exposes the six deterministic tool handlers` | The registry covers exactly `find_entry_points`, `search_symbols`, `get_file_ast`, `walk_dependents`, `trace_dependency_path`, `detect_cycles_and_hubs` |
 | `search_symbols derives matched modules from path and export tokens` | Query tokens match real node paths/exports against the fixture; unknown tokens yield `Matched 0` and no files |
-| `get_file_ast derives exports, outbound imports, and LOC from the node` | Both output variants (combined vs. verified+LOC) and the not-found dead end derive from the node |
+| `get_file_ast derives exports, outbound imports, and LOC (lines of code) from the node` | Both output variants (combined vs. verified+LOC) and the not-found dead end derive from the node |
 | `walk_dependents derives the exact hop sets and counts the graph computed` | depth 1/2 return the node's real `hop1Files`/`hop2Files`; the enforcement framing returns the combined set |
-| `trace_dependency_path traces real chains and reports honest dead ends` | BFS over outbound edges builds the chain (`2 hops`), absent `to` keeps the legacy outbound listing, unreachable targets report no chain |
+| `trace_dependency_path traces real chains and reports honest dead ends` | BFS (breadth-first search) over outbound edges builds the chain (`2 hops`), absent `to` keeps the legacy outbound listing, unreachable targets report no chain |
 | `find_entry_points returns the real zero-incoming nodes` | Files equal the graph-derived `inDegree === 0` set |
 | `detect_cycles_and_hubs finds real cycles and ranks real hubs` | A two-file cycle fixture triggers `Circular dependencies: 1` with cycle members traced; the acyclic fixture reports 0 and traces both ranked hubs |
 | `plan steps are produced by tool executes, not precomputed strings` | The same question against two different repositories yields graph-specific outputs (paths, counts, LOC) — step text cannot be literals |
@@ -88,12 +91,15 @@ run the full public pipeline:
 | `phase-03 spec lists every canonical handler name` | Every `TOOLS` registry key appears verbatim in the phase-03 spec |
 | `the UI AGENT_TOOLS sample lists every canonical handler name` | The demo `AGENT_TOOLS` sample block contains all six canonical names as string literals |
 
-`test/evals.test.js` (10 cases) — the trace-provenance eval scorer:
+`test/evals.test.js` (10 cases) — the trace-provenance eval scorer. The PASS
+rule these tests exercise: a case passes only when citation groundedness is
+100% (`0 hallucinated, 0 unproven`) **and** blast-radius recall is exactly
+100%:
 
 | Test | What it proves |
 | --- | --- |
-| `buildBenchmarkCases produces three graph-derived cases...` | Cases derive from graph metrics; case 3's question routes through the blast branch |
-| `naive benchmark lists include invented paths...` | Naive fallbacks contain at least one path outside the graph (the demo hallucination) |
+| `buildBenchmarkCases produces three graph-derived cases that route into real branches` | Cases derive from graph metrics; case 3's question routes through the blast branch |
+| `naive benchmark lists include invented paths while case questions are real` | Naive fallbacks contain at least one path outside the graph (the demo hallucination) |
 | `strict runs pass all cases: grounded, proven, full recall` | Real planner runs score 100% grounded (zero unproven) and 100% recall on the fixture |
 | `the provenance rule fails a case when a real path was never traced` | Cited-but-untraced real path → `unprovenPaths`, groundedness drops (50%), case fails |
 | `hallucinated citations are paths outside the graph and fail the case` | Invented paths are flagged and fail the case even when provenance is off |
@@ -117,8 +123,8 @@ triple-quoted strings are not modeled.
   ```
 
 - Fixtures are inline arrays of `{ path, content }`. Use repository-relative
-  POSIX paths (`src/app/page.tsx`), because the resolver operates on `/`
-  segments.
+  POSIX (`/`-separated, no backslash) paths (`src/app/page.tsx`), because the
+  resolver operates on `/` segments.
 - Assert on the public graph (`nodes`, `edges`, `cycles`, `unresolved`) or on
   documented helper returns. Do not reach into parser internals.
 - Include the minimum source text needed to trigger the behavior. The parser is
