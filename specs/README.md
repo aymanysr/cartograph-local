@@ -90,7 +90,7 @@ requests to change code.
 | Parser model | The parser is deterministic and line-oriented | `lib/cartograph-parser.js` is a line-oriented regex scanner with quote/comment masking; it builds no AST, while the app UI still uses "AST" branding |
 | Cycle algorithm | Phase 01 says cycles detected via DFS | `detectCircularDependencies` uses Tarjan SCC (DFS-based); self-imports are dropped before cycle detection |
 | Agent tool names | Phase 03 lists `trace_path` and `detect_cycles` | UI traces use `trace_dependency_path`; `detect_cycles_and_hubs` exists only as a step label in the deterministic planner, with no executor behind it |
-| Agent loop | Phase 03 describes a tool-calling loop | The built-in deterministic agent is a keyword-routed planner (`CartographAgent.buildAgentPlan`) that emits labeled steps, not a generic executor over arbitrary tool arguments |
+| Agent loop | Phase 03 describes a tool-calling loop | The agent routes questions to concrete call arguments over the `CartographAgent.TOOLS` handler registry and executes them — every trace step's output/files is derived live from the graph (ticket 04). Routing stays keyword-based, so it is still not an LLM-driven tool-calling loop |
 | Hallucination metric | Phase 03 describes a Hallucination Rate | The UI displays a hallucinated-path count (`evalScoreHallucinations`), not a percentage |
 
 ## Invariants

@@ -275,3 +275,195 @@ test('validateSynthesis tolerates empty text and an empty graph', () => {
   assert.equal(outcome.accepted, false);
   assert.deepEqual(outcome.unknownPaths, ['src/ghost.ts']);
 });
+
+// ---------------------------------------------------------------------------
+// Ticket 04: the deterministic agent becomes a real tool executor.
+// ---------------------------------------------------------------------------
+
+const { TOOLS } = require('../lib/cartograph-agent.js');
+
+function buildCyclicGraph() {
+  return parseRepository(
+    [
+      {
+        path: 'src/a/alpha.ts',
+        content: "import { b } from '../b/beta';\n\nexport const alpha = b;",
+      },
+      {
+        path: 'src/b/beta.ts',
+        content: "import { alpha } from '../a/alpha';\n\nexport const beta = alpha;",
+      },
+      {
+        path: 'src/c/gamma.ts',
+        content: "import { beta } from '../b/beta';\n\nexport const gamma = beta;",
+      },
+    ],
+    { repoName: 'cyclic-app' }
+  );
+}
+
+test('TOOLS exposes the six deterministic tool handlers', () => {
+  assert.deepEqual(
+    Object.keys(TOOLS).sort(),
+    [
+      'detect_cycles_and_hubs',
+      'find_entry_points',
+      'get_file_ast',
+      'search_symbols',
+      'trace_dependency_path',
+      'walk_dependents',
+    ]
+  );
+});
+
+test('search_symbols derives matched modules from path and export tokens', () => {
+  const graph = GRAPH;
+  const res = TOOLS.search_symbols.run({ query: 'auth | requireAuth | verify' }, graph);
+
+  const tokens = ['auth', 'requireauth', 'verify'];
+  const expected = graph.nodes
+    .filter((n) =>
+      tokens.some(
+        (t) => n.path.toLowerCase().includes(t) || n.exports.some((e) => e.toLowerCase().includes(t))
+      )
+    )
+    .map((n) => n.path);
+
+  assert.ok(expected.includes(VERIFY), 'the fixture graph has an auth node');
+  assert.deepEqual(res.files, expected, 'matched files are exactly the graph-derived token matches');
+  assert.ok(res.output.includes(expected[0]), 'output names the matched graph path');
+
+  const none = TOOLS.search_symbols.run({ query: 'zzz-unknown-symbol' }, graph);
+  assert.deepEqual(none.files, []);
+  assert.ok(none.output.includes('Matched 0'));
+});
+
+test('get_file_ast derives exports, outbound imports, and LOC from the node', () => {
+  const graph = GRAPH;
+  const node = graph.nodes.find((n) => n.path === VERIFY);
+  const outboundTargets = node.outboundEdges.map((e) => e.target);
+
+  const plain = TOOLS.get_file_ast.run({ path: VERIFY }, graph);
+  assert.ok(plain.output.includes('verifyToken()'), 'output carries the real export label');
+  assert.ok(plain.output.includes(SERVER), 'output carries the real outbound import');
+  assert.deepEqual(plain.files, [VERIFY, ...outboundTargets]);
+
+  const verified = TOOLS.get_file_ast.run({ path: VERIFY, verified: true }, graph);
+  assert.match(verified.output, new RegExp(`\\(${node.loc} LOC\\)`));
+  assert.deepEqual(verified.files, [VERIFY]);
+
+  const missing = TOOLS.get_file_ast.run({ path: 'src/ghost.ts' }, graph);
+  assert.deepEqual(missing.files, []);
+  assert.ok(missing.output.includes('No graph node'));
+});
+
+test('walk_dependents derives the exact hop sets and counts the graph computed', () => {
+  const graph = GRAPH;
+  const node = graph.nodes.find((n) => n.path === SERVER);
+
+  const d1 = TOOLS.walk_dependents.run({ path: SERVER, depth: 1 }, graph);
+  assert.deepEqual(d1.files, node.hop1Files);
+  assert.ok(d1.output.includes(`${node.hop1Files.length} direct 1-hop dependents`));
+
+  const d2 = TOOLS.walk_dependents.run({ path: SERVER, depth: 2 }, graph);
+  assert.deepEqual(d2.files, node.hop2Files);
+  assert.ok(d2.output.includes(`${node.hop2Files.length} transitive 2-hop dependents`));
+
+  const combined = TOOLS.walk_dependents.run(
+    { path: SERVER, depth: 2, framing: 'enforcement' },
+    graph
+  );
+  assert.deepEqual(combined.files, [...node.hop1Files, ...node.hop2Files]);
+  assert.ok(
+    combined.output.includes(`1-Hop enforcement callers (${node.hop1Files.length})`) &&
+      combined.output.includes(`2-Hop upstream (${node.hop2Files.length})`)
+  );
+});
+
+test('trace_dependency_path traces real chains and reports honest dead ends', () => {
+  const graph = GRAPH;
+
+  const chain = TOOLS.trace_dependency_path.run({ from: ROUTES, to: SERVER }, graph);
+  assert.deepEqual(chain.files, [ROUTES, VERIFY, SERVER], 'the chain is the real parsed route');
+  assert.ok(chain.output.includes(`${ROUTES} -> ${VERIFY} -> ${SERVER}`));
+  assert.ok(chain.output.includes('2 hops'));
+
+  const outbound = TOOLS.trace_dependency_path.run({ from: VERIFY }, graph);
+  assert.deepEqual(outbound.files, [SERVER]);
+  assert.equal(
+    outbound.output,
+    `Traced 1 outbound import(s): [${SERVER}]`,
+    'outbound listing keeps the legacy wording, derived from the node'
+  );
+
+  const dead = TOOLS.trace_dependency_path.run({ from: SERVER, to: ROUTES }, graph);
+  assert.deepEqual(dead.files, []);
+  assert.ok(dead.output.includes('No outbound dependency chain'));
+});
+
+test('find_entry_points returns the real zero-incoming nodes', () => {
+  const graph = GRAPH;
+  const expected = graph.nodes.filter((n) => n.inDegree === 0).map((n) => n.path);
+
+  assert.ok(expected.length > 0, 'the fixture has un-imported files');
+  const res = TOOLS.find_entry_points.run({}, graph);
+  assert.deepEqual(res.files, expected);
+  assert.ok(res.output.includes('Entry points'), 'output names the derived entry points');
+});
+
+test('detect_cycles_and_hubs finds real cycles and ranks real hubs', () => {
+  const cyclic = buildCyclicGraph();
+  const cyclicNodes = cyclic.nodes;
+  const expectedHubs = [...cyclicNodes]
+    .sort((a, b) => b.totalImpact - a.totalImpact)
+    .slice(0, 2)
+    .map((n) => n.path);
+
+  const cycRes = TOOLS.detect_cycles_and_hubs.run({}, cyclic);
+  assert.equal(cyclic.cycles.length, 1);
+  assert.ok(cycRes.output.includes('Circular dependencies: 1'));
+  for (const member of cyclic.cycles[0]) {
+    assert.ok(cycRes.files.includes(member), `cycle member traced: ${member}`);
+  }
+  for (const hub of expectedHubs) {
+    assert.ok(cycRes.files.includes(hub), `hub traced: ${hub}`);
+  }
+  assert.match(cycRes.output, /Top hub: .+\((\d+) dependents\)/);
+
+  const acyclicRes = TOOLS.detect_cycles_and_hubs.run({}, GRAPH);
+  const acyclicHubs = [...GRAPH.nodes]
+    .sort((a, b) => b.totalImpact - a.totalImpact)
+    .slice(0, 2)
+    .map((n) => n.path);
+  assert.ok(acyclicRes.output.includes('Circular dependencies: 0'));
+  assert.deepEqual(acyclicRes.files, acyclicHubs, 'files are the two ranked hubs when no cycle exists');
+});
+
+test('plan steps are produced by tool executes, not precomputed strings', () => {
+  const planA = buildAgentPlan('Where is authentication enforced and which modules call it directly?', GRAPH, chip);
+  assert.deepEqual(planA.steps.map((s) => s.tool), ['search_symbols', 'get_file_ast', 'walk_dependents']);
+  assert.ok(planA.steps[0].output.includes('Matched'), 'search step output is real matcher text');
+
+  // Two different repositories must produce different, graph-specific outputs
+  // for the same question shape — outputs cannot be literals.
+  const other = parseRepository(
+    [
+      {
+        path: 'src/lib/auth/guard.ts',
+        content:
+          "import { tunnel } from '../../lib/db/tunnel';\n\nexport function verifyToken() {\n  return tunnel;\n}",
+      },
+      { path: 'src/lib/db/tunnel.ts', content: 'export const tunnel = 1;' },
+    ],
+    { repoName: 'other-app' }
+  );
+  const planB = buildAgentPlan('Where is authentication enforced and which modules call it directly?', other, chip);
+
+  const targetA = planA.steps.find((s) => s.tool === 'get_file_ast');
+  const targetB = planB.steps.find((s) => s.tool === 'get_file_ast');
+  assert.equal(targetA.files[0], VERIFY);
+  assert.equal(targetB.files[0], 'src/lib/auth/guard.ts');
+  assert.notEqual(targetA.output, targetB.output, 'same question, different graph -> different derived output');
+  assert.ok(targetA.output.includes(SERVER));
+  assert.ok(targetB.output.includes('src/lib/db/tunnel.ts'));
+});

@@ -173,7 +173,7 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | File | Role |
 | --- | --- |
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
-| `cartograph-agent.js` | DOM-free agent planner (`buildAgentPlan` maps a repository question onto a deterministic graph walk and returns the steps, visited files, and every cited path) plus the LLM-output gate: `findAuthNodes` (routing input) and `validateSynthesis`, which rejects a model synthesis naming any path outside the graph or the visible tool trace |
+| `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
 | `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`) plus the graph-derived benchmark cases (`buildBenchmarkCases`) |
 | `README.md` | This guide |
 

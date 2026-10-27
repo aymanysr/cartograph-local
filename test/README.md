@@ -31,7 +31,7 @@ that naming pattern.
 
 ## Coverage
 
-Thirty-seven tests across three files, grouped by the behavior they lock down.
+Forty-five tests across three files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -53,7 +53,8 @@ The CLI test is the only one that touches the filesystem. It creates a fixture
 under `os.tmpdir()`, runs the CLI with `execFileSync`, parses the written JSON
 snapshot, and removes the fixture in a `finally` block.
 
-`test/agent.test.js` (16 cases) — the DOM-free agent planner and the synthesis
+`test/agent.test.js` (24 cases) — the DOM-free agent: a tool-handler registry
+(`CartographAgent.TOOLS`), the question router/executor, and the synthesis
 validator. Fixture graphs are built through `parseRepository`, so planner tests
 run the full public pipeline:
 
@@ -75,6 +76,14 @@ run the full public pipeline:
 | `validateSynthesis reports a graph-less trace as unproven (provenance on)` | With an empty trace, every cited graph path is flagged unproven and the answer is rejected |
 | `validateSynthesis passes prose without any path-like token` | Prose with no slash-token produces no citations and is accepted |
 | `validateSynthesis tolerates empty text and an empty graph` | Empty text is accepted; an empty graph makes any invented path `unknownPaths` and the answer rejected |
+| `TOOLS exposes the six deterministic tool handlers` | The registry covers exactly `find_entry_points`, `search_symbols`, `get_file_ast`, `walk_dependents`, `trace_dependency_path`, `detect_cycles_and_hubs` |
+| `search_symbols derives matched modules from path and export tokens` | Query tokens match real node paths/exports against the fixture; unknown tokens yield `Matched 0` and no files |
+| `get_file_ast derives exports, outbound imports, and LOC from the node` | Both output variants (combined vs. verified+LOC) and the not-found dead end derive from the node |
+| `walk_dependents derives the exact hop sets and counts the graph computed` | depth 1/2 return the node's real `hop1Files`/`hop2Files`; the enforcement framing returns the combined set |
+| `trace_dependency_path traces real chains and reports honest dead ends` | BFS over outbound edges builds the chain (`2 hops`), absent `to` keeps the legacy outbound listing, unreachable targets report no chain |
+| `find_entry_points returns the real zero-incoming nodes` | Files equal the graph-derived `inDegree === 0` set |
+| `detect_cycles_and_hubs finds real cycles and ranks real hubs` | A two-file cycle fixture triggers `Circular dependencies: 1` with cycle members traced; the acyclic fixture reports 0 and traces both ranked hubs |
+| `plan steps are produced by tool executes, not precomputed strings` | The same question against two different repositories yields graph-specific outputs (paths, counts, LOC) — step text cannot be literals |
 
 `test/evals.test.js` (10 cases) — the trace-provenance eval scorer:
 
@@ -154,7 +163,7 @@ test('resolves a new edge case', () => {
 | File | Role |
 | --- | --- |
 | `parser.test.js` | Parser and CLI tests (11 cases) |
-| `agent.test.js` | Agent planner routing, grounding, purity, and synthesis-validation tests (16 cases) |
+| `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, and synthesis-validation tests (24 cases) |
 | `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
 | `README.md` | This guide |
 

@@ -108,7 +108,7 @@ open cartograph.html           # macOS; or double-click the file
 | Parse pipeline | `parseRepositoryIntoGraph` → `applyParsedGraph` |
 | Graph rendering | `computeGraphNodePositions`, `renderCanvas`, `selectFileNode` |
 | Inspector and explanations | `renderInspectorPanel`, `buildGroundedModuleExplanationHtml` |
-| Agent planner and trace | `buildDeterministicAgentPlan` (delegates to `lib/cartograph-agent.js`), `runAgentQuery` |
+| Agent tool executor and trace | `buildDeterministicAgentPlan` (routes through `lib/cartograph-agent.js` `TOOLS` registry), `runAgentQuery` |
 | Evaluation suite | `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |
 | Settings and loading | `openSettingsModal`, `ingestUploadedFileObjects` |
 
