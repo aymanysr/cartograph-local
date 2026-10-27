@@ -1,0 +1,11 @@
+{
+  "name": "cartograph-local",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic local codebase intelligence and blast-radius graph",
+  "scripts": {
+    "test": "node --test",
+    "scan": "node cli/cartograph-scan.mjs"
+  },
+  "license": "MIT"
+}

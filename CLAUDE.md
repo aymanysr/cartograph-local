@@ -11,6 +11,7 @@ You are working on **Cartograph Local**, a deterministic codebase intelligence a
    - `hop2` (Transitive Dependents): `{ v | (v -> u) in edges for u in hop1 } - hop1 - {selected}`
    - `outbound` (Direct Imports): `{ w | (selected -> w) in edges }`
 4. **Visible Agent Tool Trace**: When answering a repository question, the agent must log each tool invocation (`tool`, `args`, `resultSummary`, `verifiedFiles`) in the step-by-step trace panel before emitting the final synthesis.
+5. **Shared Parser Rule**: All parsing lives in `lib/cartograph-parser.js`. `cartograph.html` and `cli/cartograph-scan.mjs` must load that module; never fork or duplicate parser logic. `parseRepository(files)` is the public seam used by tests.
 
 ## 3. Communication & Decision Protocol
 - If an architectural ambiguity arises, do not guess silently and do not ask open-ended questions. Present a concrete **A or B choice** with a 1-sentence trade-off and your recommended default.
@@ -18,6 +19,8 @@ You are working on **Cartograph Local**, a deterministic codebase intelligence a
 - Never silently swallow unresolved internal imports; track them so parser resolution accuracy can be inspected.
 
 ## 4. Verification Checklist Before Completing Any Task
+- [ ] `node --test` passes for the shared parser suite.
+- [ ] `node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json` produces nodes, edges, cycles, and unresolved imports without crashing.
 - [ ] Does the parser resolve `./`, `../`, `@/`, and `/index` barrel imports across the loaded repository?
 - [ ] Does clicking any node immediately update the 1-hop and 2-hop blast radius counts, graph highlighting, and grounded module explanation?
 - [ ] Are all file badges inside explanations and agent answers clickable to jump to that file on the map?

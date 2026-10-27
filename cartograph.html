@@ -6,6 +6,7 @@
   <title>Cartograph Local — AST Codebase Intelligence & Impact Graph</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <script src="lib/cartograph-parser.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1263,7 +1264,8 @@ def create_app():
       graph: {
         nodes: [],
         edges: [],
-        cycles: []
+        cycles: [],
+        unresolved: []
       },
       selectedFile: 'src/lib/db/supabase.ts',
       hoveredFile: null,
@@ -1295,26 +1297,6 @@ def create_app():
       }
     };
 
-    function classifyArchitecturalLayer(filePath) {
-      const p = filePath.toLowerCase();
-      if (p.includes('/db/') || p.includes('/core/') || p.includes('/config/') || p.includes('prisma') || p.includes('supabase') || p.includes('vector_store')) {
-        return 'core';
-      }
-      if (p.includes('/parser/') || p.includes('/ingest/') || p.includes('ast') || p.includes('resolver') || p.includes('blast') || p.includes('chunker') || p.includes('embedder')) {
-        return 'parser';
-      }
-      if (p.includes('/agent/') || p.includes('/evals/') || p.includes('explainer') || p.includes('walker') || p.includes('synthesizer') || p.includes('retriever')) {
-        return 'agent';
-      }
-      if (p.includes('/api/') || p.includes('/routes') || p.includes('/auth') || p.includes('/middleware') || p.includes('/workers')) {
-        return 'api';
-      }
-      if (p.includes('/components/') || p.includes('/hooks/') || p.endsWith('.tsx') || p.endsWith('.jsx') || p.includes('main.py') || p.endsWith('index.ts')) {
-        return 'ui';
-      }
-      return 'core';
-    }
-
     function getLayerMeta(layer) {
       const map = {
         core:   { label: 'DB & Core',     color: '#38BDF8', bg: 'rgba(56, 189, 248, 0.15)', rank: 4 },
@@ -1326,260 +1308,38 @@ def create_app():
       return map[layer] || map.core;
     }
 
-    function extractExportedSymbols(content, filePath) {
-      const exports = new Set();
-      const lines = content.split('\n');
-      const isPy = filePath.endsWith('.py');
-
-      for (const line of lines) {
-        if (isPy) {
-          const pyDef = line.match(/^(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(/);
-          if (pyDef && !pyDef[1].startsWith('_')) exports.add(pyDef[1] + '()');
-          const pyCls = line.match(/^class\s+([A-Za-z0-9_]+)/);
-          if (pyCls) exports.add(pyCls[1]);
-          const pyVar = line.match(/^([A-Za-z0-9_]+)\s*=\s*[A-Za-z0-9_]+\(/);
-          if (pyVar && !pyVar[1].startsWith('_')) exports.add(pyVar[1]);
-        } else {
-          const fnMatch = line.match(/export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)/);
-          if (fnMatch) exports.add(fnMatch[1] + '()');
-          const constMatch = line.match(/export\s+const\s+([A-Za-z0-9_]+)/);
-          if (constMatch) exports.add(constMatch[1]);
-          const typeMatch = line.match(/export\s+(?:interface|type|class|enum)\s+([A-Za-z0-9_]+)/);
-          if (typeMatch) exports.add(typeMatch[1]);
-        }
-      }
-      if (exports.size === 0) {
-        const base = filePath.split('/').pop().replace(/\.[^.]+$/, '');
-        exports.add(base);
-      }
-      return Array.from(exports);
-    }
-
-    function resolveModuleSpecifier(fromFile, rawSpec, knownPathsSet, allPathsList) {
-      const spec = rawSpec.trim().replace(/^['"]|['"]$/g, '');
-      if (!spec) return null;
-
-      const candidates = [];
-
-      if (spec.startsWith('@/') || spec.startsWith('~/')) {
-        const stripped = spec.slice(2);
-        candidates.push('src/' + stripped);
-        candidates.push(stripped);
-      } else if (spec.startsWith('./') || spec.startsWith('../')) {
-        const dirParts = fromFile.split('/').slice(0, -1);
-        for (const seg of spec.split('/')) {
-          if (!seg || seg === '.') continue;
-          if (seg === '..') dirParts.pop();
-          else dirParts.push(seg);
-        }
-        candidates.push(dirParts.join('/'));
-      } else if (spec.includes('.') && !spec.includes('/')) {
-        candidates.push(spec.replace(/\./g, '/'));
-      } else {
-        candidates.push(spec);
-        candidates.push('src/' + spec);
-      }
-
-      const exts = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go', '/index.ts', '/index.tsx', '/index.js', '/__init__.py'];
-      for (const base of candidates) {
-        for (const ext of exts) {
-          const cand = base + ext;
-          if (knownPathsSet.has(cand)) return cand;
-        }
-      }
-
-      for (const base of candidates) {
-        for (const ext of exts) {
-          const suffix = '/' + base + ext;
-          const found = allPathsList.find(p => p.endsWith(suffix));
-          if (found) return found;
-        }
-      }
-      return null;
-    }
-
-    function extractFileImports(filePath, content, knownPathsSet, allPathsList) {
-      const edges = [];
-      const lines = content.split('\n');
-      const isPy = filePath.endsWith('.py');
-
-      lines.forEach((lineText, idx) => {
-        const lineNum = idx + 1;
-        const trimmed = lineText.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('*')) return;
-
-        if (isPy) {
-          const pyFrom = trimmed.match(/^from\s+([A-Za-z0-9_.]+)\s+import\s+(.+)$/);
-          if (pyFrom) {
-            const target = resolveModuleSpecifier(filePath, pyFrom[1], knownPathsSet, allPathsList);
-            if (target && target !== filePath) {
-              edges.push({
-                source: filePath,
-                target,
-                specifier: pyFrom[1],
-                importedSymbols: pyFrom[2].split(',').map(s => s.trim()),
-                line: lineNum,
-                statement: trimmed
-              });
-            }
-          }
-          const pyImp = trimmed.match(/^import\s+([A-Za-z0-9_.]+)/);
-          if (pyImp && !pyFrom) {
-            const target = resolveModuleSpecifier(filePath, pyImp[1], knownPathsSet, allPathsList);
-            if (target && target !== filePath) {
-              edges.push({
-                source: filePath,
-                target,
-                specifier: pyImp[1],
-                importedSymbols: [pyImp[1].split('.').pop()],
-                line: lineNum,
-                statement: trimmed
-              });
-            }
-          }
-        } else {
-          const esMatch = trimmed.match(/(?:import|export)\s+(?:type\s+)?(?:(.+?)\s+from\s+)?['"]([^'"]+)['"]/);
-          if (esMatch) {
-            const rawSymbols = esMatch[1] || '';
-            const specifier = esMatch[2];
-            const target = resolveModuleSpecifier(filePath, specifier, knownPathsSet, allPathsList);
-            if (target && target !== filePath) {
-              const cleanedSyms = rawSymbols
-                .replace(/[{}]/g, '')
-                .split(',')
-                .map(s => s.trim().split(/\s+as\s+/)[0].trim())
-                .filter(Boolean);
-              edges.push({
-                source: filePath,
-                target,
-                specifier,
-                importedSymbols: cleanedSyms,
-                line: lineNum,
-                statement: trimmed
-              });
-            }
-          }
-          const reqMatch = trimmed.match(/(?:require|import)\(\s*['"]([^'"]+)['"]\s*\)/);
-          if (reqMatch && !esMatch) {
-            const target = resolveModuleSpecifier(filePath, reqMatch[1], knownPathsSet, allPathsList);
-            if (target && target !== filePath) {
-              edges.push({
-                source: filePath,
-                target,
-                specifier: reqMatch[1],
-                importedSymbols: ['*'],
-                line: lineNum,
-                statement: trimmed
-              });
-            }
-          }
-        }
-      });
-
-      return edges;
-    }
-
-    function detectCircularDependencies(nodes, edges) {
-      const cycles = [];
-      const cycleSet = new Set();
-
-      for (const e1 of edges) {
-        for (const e2 of edges) {
-          if (e1.target === e2.source && e2.target === e1.source) {
-            const key = [e1.source, e1.target].sort().join('<->');
-            if (!cycleSet.has(key)) {
-              cycleSet.add(key);
-              cycles.push([e1.source, e1.target, e1.source]);
-            }
-          }
-        }
-      }
-      return cycles;
-    }
-
-    function computeBlastRadiusForNode(targetPath, edges) {
-      const hop1Edges = edges.filter(e => e.target === targetPath && e.source !== targetPath);
-      const hop1Files = Array.from(new Set(hop1Edges.map(e => e.source)));
-      const hop1Set = new Set(hop1Files);
-
-      const hop2Details = [];
-      const hop2Set = new Set();
-      for (const e of edges) {
-        if (hop1Set.has(e.target) && e.source !== targetPath && !hop1Set.has(e.source)) {
-          if (!hop2Set.has(e.source)) {
-            hop2Set.add(e.source);
-            hop2Details.push({
-              file: e.source,
-              via: e.target,
-              line: e.line,
-              statement: e.statement
-            });
-          }
-        }
-      }
-
-      const outboundEdges = edges.filter(e => e.source === targetPath && e.target !== targetPath);
-
-      return {
-        hop1Edges,
-        hop1Files,
-        hop2Files: Array.from(hop2Set),
-        hop2Details,
-        outboundEdges,
-        totalImpactCount: hop1Files.length + hop2Set.size
-      };
-    }
-
     function parseRepositoryIntoGraph(files, repoName, repoDescription = '') {
       state.repoName = repoName;
       state.repoDescription = repoDescription;
       state.rawFiles = files;
 
-      const allPathsList = files.map(f => f.path);
-      const knownPathsSet = new Set(allPathsList);
+      const graph = CartographParser.parseRepository(files, {
+        repoName,
+        repoDescription
+      });
+      applyParsedGraph(graph);
+    }
 
-      const nodes = [];
-      const edges = [];
+    function applyParsedGraph(graph) {
+      const nodes = graph.nodes || [];
+      const edges = graph.edges || [];
 
-      for (const file of files) {
-        const layer = classifyArchitecturalLayer(file.path);
-        const exports = extractExportedSymbols(file.content, file.path);
-        const loc = file.content.split('\n').length;
-        const fileEdges = extractFileImports(file.path, file.content, knownPathsSet, allPathsList);
-        edges.push(...fileEdges);
-
-        nodes.push({
-          id: file.path,
-          path: file.path,
-          label: file.path.split('/').pop(),
-          folder: file.path.split('/').slice(0, -1).join('/'),
-          layer,
-          exports,
-          loc,
-          content: file.content,
-          x: 0,
-          y: 0,
-          vx: 0,
-          vy: 0
-        });
+      state.repoName = graph.name || state.repoName;
+      state.repoDescription = graph.description || state.repoDescription || '';
+      if (!state.rawFiles.length || state.rawFiles.length !== nodes.length) {
+        state.rawFiles = nodes.map(n => ({ path: n.path, content: n.content }));
       }
 
-      for (const node of nodes) {
-        const br = computeBlastRadiusForNode(node.path, edges);
-        node.hop1Files = br.hop1Files;
-        node.hop2Files = br.hop2Files;
-        node.hop1Edges = br.hop1Edges;
-        node.hop2Details = br.hop2Details;
-        node.outboundEdges = br.outboundEdges;
-        node.totalImpact = br.totalImpactCount;
-      }
-
-      const cycles = detectCircularDependencies(nodes, edges);
-
-      state.graph = { nodes, edges, cycles };
+      state.graph = {
+        nodes,
+        edges,
+        cycles: graph.cycles || [],
+        unresolved: graph.unresolved || []
+      };
       state.agentWalkedFiles.clear();
       state.agentActiveEdges.clear();
 
+      const knownPathsSet = new Set(nodes.map(n => n.path));
       if (!knownPathsSet.has(state.selectedFile) && nodes.length > 0) {
         const sorted = [...nodes].sort((a, b) => b.totalImpact - a.totalImpact);
         state.selectedFile = sorted[0].path;
@@ -2875,6 +2635,7 @@ ${cycles.length > 0 ? `- **Active Tech Debt Alert**: Resolve the circular depend
 // Run locally: node cli/cartograph-scan.mjs /path/to/repo --serve 4173
 import fs from 'node:fs';
 import path from 'node:path';
+import CartographParser from '../lib/cartograph-parser.js';
 
 const IGNORED = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.venv']);
 const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go']);
@@ -2894,8 +2655,9 @@ export function scanLocalRepo(rootDir, dir = rootDir, list = []) {
 if (import.meta.url === \`file://\${process.argv[1]}\`) {
   const target = path.resolve(process.argv[2] || '.');
   const files = scanLocalRepo(target);
-  fs.writeFileSync('cartograph-snapshot.json', JSON.stringify({ name: path.basename(target), files }, null, 2));
-  console.log(\`Scanned \${files.length} files into cartograph-snapshot.json\`);
+  const graph = CartographParser.parseRepository(files, { repoName: path.basename(target) });
+  fs.writeFileSync('cartograph-snapshot.json', JSON.stringify({ name: path.basename(target), graph }, null, 2));
+  console.log(\`Scanned \${graph.nodes.length} nodes / \${graph.edges.length} edges into cartograph-snapshot.json\`);
 }`;
 
       const textarea = document.getElementById('specDocTextarea');
@@ -2971,6 +2733,11 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         try {
           const text = await fileList[0].text();
           const parsed = JSON.parse(text);
+          if (parsed && parsed.graph && Array.isArray(parsed.graph.nodes)) {
+            applyParsedGraph(parsed.graph);
+            showToast(`Loaded ${parsed.graph.nodes.length} parsed nodes from ${fileList[0].name}`);
+            return;
+          }
           if (parsed && Array.isArray(parsed.files)) {
             parseRepositoryIntoGraph(parsed.files, parsed.name || 'imported-snapshot', 'Imported from Cartograph JSON snapshot');
             showToast(`Loaded ${parsed.files.length} files from ${fileList[0].name}`);
@@ -3247,7 +3014,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       });
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       try {
         const saved = localStorage.getItem('cartograph_agent_config');
         if (saved) Object.assign(state.agentConfig, JSON.parse(saved));
@@ -3256,12 +3023,31 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       initCanvasInteractions();
       initGlobalDragAndDrop();
 
-      const initialPreset = PRESET_REPOS['cartograph-saas'];
-      parseRepositoryIntoGraph(initialPreset.files, initialPreset.name, initialPreset.description);
+      let loadedFromServer = false;
+      try {
+        const response = await fetch('/api/local-repo');
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload && payload.graph && Array.isArray(payload.graph.nodes)) {
+            applyParsedGraph(payload.graph);
+            loadedFromServer = true;
+            showToast(`Loaded scanned repository: ${payload.name || payload.graph.name || 'local'}`);
+          }
+        }
+      } catch (e) {
+        // Opened directly from disk (file://) — fall back to the bundled sample repo.
+      }
+
+      if (!loadedFromServer) {
+        const initialPreset = PRESET_REPOS['cartograph-saas'];
+        parseRepositoryIntoGraph(initialPreset.files, initialPreset.name, initialPreset.description);
+      }
 
       runAgentQuery('Where does auth get enforced across the repository?');
       switchRightPanelTab('inspector');
-      selectFileNode('src/lib/db/supabase.ts', false);
+      if (state.graph.nodes.some(n => n.path === 'src/lib/db/supabase.ts')) {
+        selectFileNode('src/lib/db/supabase.ts', false);
+      }
 
       window.addEventListener('resize', () => {
         computeGraphNodePositions();

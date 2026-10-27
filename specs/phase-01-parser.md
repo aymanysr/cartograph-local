@@ -17,3 +17,4 @@ Turn a raw collection of repository files into a verified, queryable directed gr
    - `hop1Dependents` (1-hop breakage set)
    - `hop2Dependents` (2-hop transitive breakage set)
    - `cycles` (circular dependency loops detected via DFS)
+5. Record every unresolved module specifier in `graph.unresolved` with source file, line, specifier, and classification (`internal-unresolved` vs `external-package`) so resolution accuracy can be inspected.
