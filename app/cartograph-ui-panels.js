@@ -124,99 +124,225 @@
       return `${makeFileChipHtml(node.path)} is a ${escapeHtml(getLayerMeta(node.layer).label)} module with ${node.loc} lines${exports ? `, exporting ${exports}${omitted}` : ' and no parsed exports'}. Its parsed imports and dependents are listed below; changing its exported contract may affect ${node.totalImpact} files within two hops.${membership}`;
     }
 
+    function copySelectedFilePath() {
+      if (!state.selectedFile) return;
+      if (typeof copyTextSafe === 'function') {
+        copyTextSafe(state.selectedFile, `Copied path: ${state.selectedFile}`);
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(state.selectedFile).then(() => {
+          showToast(`Copied path: ${state.selectedFile}`);
+        }).catch(() => {
+          showToast(`Selected file: ${state.selectedFile}`);
+        });
+      } else {
+        showToast(`Selected file: ${state.selectedFile}`);
+      }
+    }
+
+    function centerSelectedOnMap() {
+      if (!state.selectedFile) return;
+      if (state.activeView !== 'explorer' && typeof switchMainView === 'function') {
+        switchMainView('explorer');
+      }
+      if (typeof CartographNavigation !== 'undefined' && CartographNavigation.centerOnNode) {
+        CartographNavigation.centerOnNode(state.selectedFile);
+      } else {
+        const node = state.graph.nodes ? state.graph.nodes.find(n => n.path === state.selectedFile) : null;
+        const canvas = document.getElementById('dependencyCanvas');
+        if (node && canvas && typeof CartographCamera !== 'undefined') {
+          state.camera = CartographCamera.centerOnNode(state.camera, node, canvas.clientWidth, canvas.clientHeight);
+        }
+      }
+      showToast(`Centered on ${state.selectedFile.split('/').pop()}`);
+    }
+
+    function toggleSimulateSelected() {
+      if (!state.selectedFile) return;
+      if (typeof toggleBreakSimulation === 'function') {
+        toggleBreakSimulation();
+      } else {
+        state.simulateBreakingChange = !state.simulateBreakingChange;
+        if (typeof syncCanvasToggleState === 'function') syncCanvasToggleState();
+      }
+    }
+
     function renderInspectorPanel() {
-      const node = state.graph.nodes.find(n => n.path === state.selectedFile);
+      const node = state.graph.nodes ? state.graph.nodes.find(n => n.path === state.selectedFile) : null;
+      const actionToolbar = document.getElementById('inspectorActionToolbar');
+      const cycleBadge = document.getElementById('inspectorCycleBadge');
+      const metaContext = document.getElementById('inspectorMetaContext');
+
       if (!node) {
-        ['inspectorLayerBadge','inspectorLocBadge','inspectorImpactPercent','inspectorHop1Count','inspectorHop2Count','inspectorOutboundCount','hop1HeaderBadge','hop2HeaderBadge','outboundHeaderBadge'].forEach(id => { document.getElementById(id).textContent = '—'; });
-        document.getElementById('inspectorFilePath').textContent = 'No file selected';
-        document.getElementById('inspectorImpactCaption').textContent = '';
-        ['inspectorExportsList','inspectorSourceCode','hop1ListContainer','hop2ListContainer','outboundListContainer'].forEach(id => document.getElementById(id).replaceChildren());
-        document.getElementById('inspectorExplanationText').textContent = 'Open a folder or drop a repository snapshot to explore its files.';
+        ['inspectorLayerBadge','inspectorLocBadge','inspectorImpactPercent','inspectorHop1Count','inspectorHop2Count','inspectorOutboundCount','hop1HeaderBadge','hop2HeaderBadge','outboundHeaderBadge'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = '—';
+        });
+        const pathEl = document.getElementById('inspectorFilePath');
+        if (pathEl) pathEl.textContent = 'No file selected';
+        const captionEl = document.getElementById('inspectorImpactCaption');
+        if (captionEl) captionEl.textContent = '';
+        if (cycleBadge) {
+          cycleBadge.classList.add('hidden');
+          cycleBadge.textContent = '';
+        }
+        if (metaContext) metaContext.classList.add('hidden');
+        if (actionToolbar) {
+          actionToolbar.style.opacity = '0.35';
+          actionToolbar.querySelectorAll('button').forEach(btn => {
+            btn.disabled = true;
+            btn.setAttribute('aria-disabled', 'true');
+          });
+        }
+        ['inspectorExportsList','inspectorSourceCode','hop1ListContainer','hop2ListContainer','outboundListContainer'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.replaceChildren();
+        });
+        const expEl = document.getElementById('inspectorExplanationText');
+        if (expEl) expEl.textContent = 'Open a folder or drop a repository snapshot to explore its files.';
         return;
       }
+
+      if (metaContext) metaContext.classList.remove('hidden');
+      if (actionToolbar) {
+        actionToolbar.style.opacity = '1';
+        actionToolbar.querySelectorAll('button').forEach(btn => {
+          btn.disabled = false;
+          btn.removeAttribute('aria-disabled');
+        });
+      }
+      const inspSimBtn = document.getElementById('btnInspectorSimulate');
+      if (inspSimBtn) inspSimBtn.setAttribute('aria-pressed', String(Boolean(state.simulateBreakingChange)));
 
       const layerMeta = getLayerMeta(node.layer);
       const totalFiles = state.graph.nodes.length;
       const pct = totalFiles > 0 ? ((node.totalImpact / totalFiles) * 100).toFixed(1) : 0;
 
-      document.getElementById('inspectorLayerBadge').textContent = layerMeta.label;
-      document.getElementById('inspectorLocBadge').textContent = `${node.loc} lines`;
-      document.getElementById('inspectorFilePath').textContent = node.path;
+      const layerBadge = document.getElementById('inspectorLayerBadge');
+      if (layerBadge) layerBadge.textContent = layerMeta.label;
+      const locBadge = document.getElementById('inspectorLocBadge');
+      if (locBadge) locBadge.textContent = `${node.loc} lines`;
+      const pathEl = document.getElementById('inspectorFilePath');
+      if (pathEl) pathEl.textContent = node.path;
 
-      document.getElementById('inspectorExportsList').innerHTML = node.exports.map(sym =>
-        `<span class="export-symbol">${escapeHtml(sym)}</span>`
-      ).join('');
+      // Circular dependency warning badge in inspector
+      const cycle = state.graph.cycles.find(paths => paths.includes(node.path));
+      if (cycleBadge) {
+        if (cycle) {
+          cycleBadge.classList.remove('hidden');
+          const otherFiles = cycle.filter(p => p !== node.path);
+          cycleBadge.innerHTML = ` · <span class="text-rose-400 font-medium" title="Cycle with ${escapeHtml(otherFiles.join(', '))}">↺ Cycle (${cycle.length} files)</span>`;
+        } else {
+          cycleBadge.classList.add('hidden');
+          cycleBadge.textContent = '';
+        }
+      }
 
-      document.getElementById('inspectorImpactPercent').textContent = `${node.totalImpact} / ${totalFiles} files`;
-      document.getElementById('inspectorImpactCaption').textContent = `in the 2-level blast radius (${pct}%)`;
-      document.getElementById('inspectorHop1Count').textContent = String(node.hop1Files.length);
-      document.getElementById('inspectorHop2Count').textContent = String(node.hop2Files.length);
-      document.getElementById('inspectorOutboundCount').textContent = String(node.outboundEdges.length);
+      const exportsList = document.getElementById('inspectorExportsList');
+      if (exportsList) {
+        exportsList.innerHTML = node.exports.map(sym =>
+          `<span class="export-symbol">${escapeHtml(sym)}</span>`
+        ).join('');
+      }
+
+      const impactPct = document.getElementById('inspectorImpactPercent');
+      if (impactPct) impactPct.textContent = `${node.totalImpact} / ${totalFiles} files`;
+      const impactCap = document.getElementById('inspectorImpactCaption');
+      if (impactCap) impactCap.textContent = `in the 2-level blast radius (${pct}%)`;
+
+      const hop1Count = document.getElementById('inspectorHop1Count');
+      if (hop1Count) hop1Count.textContent = String(node.hop1Files.length);
+      const hop2Count = document.getElementById('inspectorHop2Count');
+      if (hop2Count) hop2Count.textContent = String(node.hop2Files.length);
+      const outCount = document.getElementById('inspectorOutboundCount');
+      if (outCount) outCount.textContent = String(node.outboundEdges.length);
 
       ['inspectorHop1Count','inspectorHop2Count','inspectorOutboundCount'].forEach(id => {
-        document.getElementById(id).dataset.zero = String(document.getElementById(id).textContent === '0');
+        const el = document.getElementById(id);
+        if (el) el.dataset.zero = String(el.textContent === '0');
       });
-      document.getElementById('inspectorExplanationText').innerHTML = buildGroundedModuleExplanationHtml(node);
 
-      document.getElementById('hop1HeaderBadge').textContent = `${node.hop1Files.length} file${node.hop1Files.length === 1 ? '' : 's'}`;
+      const explanationEl = document.getElementById('inspectorExplanationText');
+      if (explanationEl) explanationEl.innerHTML = buildGroundedModuleExplanationHtml(node);
+
+      const hop1Badge = document.getElementById('hop1HeaderBadge');
+      if (hop1Badge) hop1Badge.textContent = `${node.hop1Files.length} file${node.hop1Files.length === 1 ? '' : 's'}`;
       const hop1Container = document.getElementById('hop1ListContainer');
-      if (node.hop1Edges.length === 0) {
-        hop1Container.innerHTML = `<div class="p-3 text-xs required-muted">No files directly import this module.</div>`;
-      } else {
-        hop1Container.innerHTML = node.hop1Edges.map(edge => `
-          <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div>${makeFileChipHtml(edge.source)}</div>
-              <div class="font-mono text-[10px] text-slate-400 truncate mt-1" title="${escapeHtml(edge.statement)}">L${edge.line}: ${escapeHtml(edge.statement)}</div>
-            </div>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 shrink-0">1-Hop</span>
-          </div>
-        `).join('');
-      }
-
-      document.getElementById('hop2HeaderBadge').textContent = `${node.hop2Files.length} file${node.hop2Files.length === 1 ? '' : 's'}`;
-      const hop2Container = document.getElementById('hop2ListContainer');
-      if (node.hop2Details.length === 0) {
-        hop2Container.innerHTML = `<div class="p-3 text-xs required-muted">No secondary 2-hop transitive dependents.</div>`;
-      } else {
-        hop2Container.innerHTML = node.hop2Details.map(det => `
-          <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div class="flex items-center flex-wrap gap-1 text-[11px] text-slate-400">
-                ${makeFileChipHtml(det.file)}
-                <span>→ via</span>
-                ${makeFileChipHtml(det.via)}
+      if (hop1Container) {
+        if (node.hop1Edges.length === 0) {
+          hop1Container.innerHTML = `<div class="p-3 text-xs required-muted">No files directly import this module.</div>`;
+        } else {
+          hop1Container.innerHTML = node.hop1Edges.map(edge => `
+            <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2 border-b border-slate-800/40 last:border-b-0">
+              <div class="min-w-0">
+                <div>${makeFileChipHtml(edge.source)}</div>
+                <div class="font-mono text-[10px] text-slate-400 truncate mt-1" title="${escapeHtml(edge.statement)}">
+                  <span class="text-rose-400 font-semibold">L${edge.line}</span>: ${escapeHtml(edge.statement)}
+                </div>
               </div>
-              <div class="font-mono text-[10px] text-slate-400 truncate mt-1">L${det.line}: ${escapeHtml(det.statement)}</div>
+              <span data-badge class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 shrink-0">1-Hop</span>
             </div>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 shrink-0">2-Hop</span>
-          </div>
-        `).join('');
+          `).join('');
+        }
       }
 
-      document.getElementById('outboundHeaderBadge').textContent = `${node.outboundEdges.length} file${node.outboundEdges.length === 1 ? '' : 's'}`;
+      const hop2Badge = document.getElementById('hop2HeaderBadge');
+      if (hop2Badge) hop2Badge.textContent = `${node.hop2Files.length} file${node.hop2Files.length === 1 ? '' : 's'}`;
+      const hop2Container = document.getElementById('hop2ListContainer');
+      if (hop2Container) {
+        if (node.hop2Details.length === 0) {
+          hop2Container.innerHTML = `<div class="p-3 text-xs required-muted">No secondary 2-hop transitive dependents.</div>`;
+        } else {
+          hop2Container.innerHTML = node.hop2Details.map(det => `
+            <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2 border-b border-slate-800/40 last:border-b-0">
+              <div class="min-w-0">
+                <div class="flex items-center flex-wrap gap-1 text-[11px] text-slate-400">
+                  ${makeFileChipHtml(det.file)}
+                  <span class="text-slate-500">→ via</span>
+                  ${makeFileChipHtml(det.via)}
+                </div>
+                <div class="font-mono text-[10px] text-slate-400 truncate mt-1">
+                  <span class="text-amber-400 font-semibold">L${det.line}</span>: ${escapeHtml(det.statement)}
+                </div>
+              </div>
+              <span data-badge class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 shrink-0">2-Hop</span>
+            </div>
+          `).join('');
+        }
+      }
+
+      const outBadge = document.getElementById('outboundHeaderBadge');
+      if (outBadge) outBadge.textContent = `${node.outboundEdges.length} file${node.outboundEdges.length === 1 ? '' : 's'}`;
       const outboundContainer = document.getElementById('outboundListContainer');
-      if (node.outboundEdges.length === 0) {
-        outboundContainer.innerHTML = `<div class="p-3 text-xs required-muted">Zero internal imports (foundational module).</div>`;
-      } else {
-        outboundContainer.innerHTML = node.outboundEdges.map(edge => `
-          <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div>${makeFileChipHtml(edge.target)}</div>
-              <div class="font-mono text-[10px] text-slate-400 truncate mt-1">L${edge.line}: ${escapeHtml(edge.statement)}</div>
+      if (outboundContainer) {
+        if (node.outboundEdges.length === 0) {
+          outboundContainer.innerHTML = `<div class="p-3 text-xs required-muted">Zero internal imports (foundational module).</div>`;
+        } else {
+          outboundContainer.innerHTML = node.outboundEdges.map(edge => `
+            <div class="p-2.5 hover:bg-slate-800/50 flex items-start justify-between gap-2 border-b border-slate-800/40 last:border-b-0">
+              <div class="min-w-0">
+                <div>${makeFileChipHtml(edge.target)}</div>
+                <div class="font-mono text-[10px] text-slate-400 truncate mt-1">
+                  <span class="text-cyan-400 font-semibold">L${edge.line}</span>: ${escapeHtml(edge.statement)}
+                </div>
+              </div>
+              <span data-badge class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 shrink-0">Imports</span>
             </div>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 shrink-0">Imports</span>
-          </div>
-        `).join('');
+          `).join('');
+        }
       }
 
-      const codeLines = node.content.split('\n').map((line, i) => {
+      const codeLines = (node.content || '').split('\n').map((line, i) => {
         const ln = String(i + 1).padStart(2, ' ');
         const isImportLine = node.outboundEdges.some(e => e.line === i + 1);
         const rowClass = isImportLine ? 'source-row source-import' : 'source-row';
         return `<span class="${rowClass}"><span class="source-line-number">${ln}</span>${escapeHtml(line)}</span>`;
       }).join('');
-      document.getElementById('inspectorSourceCode').innerHTML = codeLines;
+      const sourceCodeEl = document.getElementById('inspectorSourceCode');
+      if (sourceCodeEl) sourceCodeEl.innerHTML = codeLines;
+
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
     }
 
     function escapeHtml(str) {

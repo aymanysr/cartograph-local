@@ -151,4 +151,31 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
 - **Verification:**
   - 130/130 unit tests passing across all 11 test suites (`node --test`).
 
+#### ADR-009: Observability, Grounding Provenance & Inspector Workflow Upgrades
+- **Status:** Implemented & EGM Verified (2026-10-29)
+- **Motivation:**
+  Following the layout and math decoupling, user workflows required three critical enhancements:
+  1. **Inspector Panel**: Turning a passive file summary into an active workspace hub with quick actions (one-click Ask Agent, Viewport Centering, Contract Breaking Simulation, Path Copying) and circular dependency entanglement awareness.
+  2. **Agent Tool Trace**: Surfacing granular AST exploration steps with semantic badges (Symbol Search, AST Inspection, Dependent Walk, Path Trace, Entry Points, Cycles & Hubs) and GitHub Markdown export.
+  3. **Benchmark Evals**: Rigorous evaluation suite controls (expand/collapse all, JSON audit report export), disambiguated failure modes (incomplete recall vs. unproven vs. hallucinated), and visual breakdown of missed expected blast-radius citations.
+- **Architectural Seams & Remediation (EGM Guided)**:
+  1. **Inspector Hub (`cartograph.html`, `app/cartograph-ui-panels.js`, `app/cartograph-canvas-render.js`)**:
+     - Quick Action Toolbar in 2x2 grid layout with semantic Lucide icons.
+     - Global synchronization of break simulation via `syncCanvasToggleState()`, eliminating divergent state between canvas toolbar, alert banner, and inspector.
+     - Defensive empty state: Disables buttons and hides metadata when no file is selected.
+     - Circular dependency warning badge (`↺ Cycle (N files)`).
+  2. **Agent Observability (`app/cartograph-agent-evals.js`)**:
+     - `TOOL_META` mapping 6 AST handlers to distinct semantic palettes.
+     - WCAG AA compliant typography (upgraded monospace arguments from 10px text-slate-500 to text-xs text-slate-400 with 7.7:1 contrast).
+     - Markdown Exporter (`copyAgentRunMarkdown`) capturing question, tool step badges, arguments, outputs, discovered files, and answer via shared `copyTextSafe()`.
+  3. **Evaluation Rigor (`app/cartograph-agent-evals.js`, `lib/cartograph-evals.js`)**:
+     - Dual-encoded pass/fail pills disambiguating `incomplete recall` from `unproven` and `hallucinated`.
+     - Full compliance with CLAUDE.md Invariant 2 (*Strict Grounding Contract*): unproven file paths are rendered as interactive, clickable badges (`data-filepath="..."`).
+     - Visual audit of missed expected citations in failed recall cases.
+     - Safe JSON report export with DOM body attachment and deferred `URL.revokeObjectURL`.
+- **Verification**:
+  - 132/132 tests passing across all 11 test suites (`node --test`).
+  - Headless Playwright suite verified with 0 page errors and 0 console errors.
+
+
 

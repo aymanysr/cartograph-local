@@ -540,30 +540,36 @@
       const btn = document.getElementById('btnSimulateBreak');
       const banner = document.getElementById('canvasAlertBanner');
       const bannerText = document.getElementById('canvasAlertText');
-      const selNode = state.graph.nodes.find(n => n.path === state.selectedFile);
+      const selNode = state.graph.nodes ? state.graph.nodes.find(n => n.path === state.selectedFile) : null;
 
       if (state.simulateBreakingChange && selNode) {
-        btn.className = 'px-2.5 py-1 rounded text-xs font-medium bg-amber-500 text-slate-950 font-semibold flex items-center gap-1 transition-all';
-        banner.classList.remove('hidden');
-        bannerText.textContent = `Simulated signature change in ${selNode.path} (${selNode.exports[0] || 'default'}): ${selNode.hop1Files.length} direct files and ${selNode.hop2Files.length} transitive files will break!`;
+        if (btn) btn.className = 'px-2.5 py-1 rounded text-xs font-medium bg-amber-500 text-slate-950 font-semibold flex items-center gap-1 transition-all';
+        if (banner) banner.classList.remove('hidden');
+        if (bannerText) bannerText.textContent = `Simulated signature change in ${selNode.path} (${selNode.exports[0] || 'default'}): ${selNode.hop1Files.length} direct files and ${selNode.hop2Files.length} transitive files will break!`;
       } else {
-        btn.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all';
-        banner.classList.add('hidden');
+        if (btn) btn.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all';
+        if (banner) banner.classList.add('hidden');
       }
       syncCanvasToggleState();
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
     }
 
     function clearCanvasBanner() {
       state.simulateBreakingChange = false;
-      document.getElementById('canvasAlertBanner').classList.add('hidden');
+      const banner = document.getElementById('canvasAlertBanner');
+      if (banner) banner.classList.add('hidden');
       syncCanvasToggleState();
-      document.getElementById('btnSimulateBreak').className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all';
+      const btn = document.getElementById('btnSimulateBreak');
+      if (btn) btn.className = 'px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all';
     }
 
 
     function syncCanvasToggleState() {
-      [['btnToggleIsolate', state.isolateBlastRadius], ['btnSimulateBreak', state.simulateBreakingChange]].forEach(([id, pressed]) => {
+      [
+        ['btnToggleIsolate', state.isolateBlastRadius],
+        ['btnSimulateBreak', state.simulateBreakingChange],
+        ['btnInspectorSimulate', state.simulateBreakingChange]
+      ].forEach(([id, pressed]) => {
         const button = document.getElementById(id);
         if (button) button.setAttribute('aria-pressed', String(pressed));
       });
