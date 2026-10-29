@@ -81,3 +81,63 @@ test('CartographCamera exports DEFAULT_PAD as a Padding object and supports MIN/
   assert.equal(CartographCamera.MIN_ZOOM, 0.05);
   assert.equal(CartographCamera.MAX_ZOOM, 2.6);
 });
+
+test('CartographCamera createCamera provides encapsulated stateful camera with spatial queries', () => {
+  const cam = CartographCamera.createCamera({ x: 100, y: 50, zoom: 1.0 });
+
+  assert.equal(cam.x, 100);
+  assert.equal(cam.y, 50);
+  assert.equal(cam.zoom, 1.0);
+
+  // Pan
+  cam.panBy(20, -10);
+  assert.equal(cam.x, 120);
+  assert.equal(cam.y, 40);
+
+  // Coordinate projections
+  const screen = cam.toScreen({ x: 200, y: 100 });
+  assert.equal(screen.x, 200 * 1.0 + 120);
+  assert.equal(screen.y, 100 * 1.0 + 40);
+
+  const world = cam.toWorld(screen);
+  assert.ok(Math.abs(world.x - 200) < 1e-9);
+  assert.ok(Math.abs(world.y - 100) < 1e-9);
+
+  // Zoom with clamping
+  cam.zoomAt({ x: 400, y: 300 }, 2.0);
+  assert.equal(cam.zoom, 2.0);
+
+  cam.zoom = 100; // clamp to MAX_ZOOM
+  assert.equal(cam.zoom, CartographCamera.MAX_ZOOM);
+
+  cam.zoom = 0.001; // clamp to MIN_ZOOM
+  assert.equal(cam.zoom, CartographCamera.MIN_ZOOM);
+
+  // Reset for viewport queries
+  cam.setState({ x: 0, y: 0, zoom: 1.0 });
+  const viewWidth = 800;
+  const viewHeight = 600;
+
+  const visibleBox = cam.getVisibleWorldBox(viewWidth, viewHeight);
+  assert.equal(visibleBox.minX, 0);
+  assert.equal(visibleBox.minY, 0);
+  assert.equal(visibleBox.maxX, 800);
+  assert.equal(visibleBox.maxY, 600);
+
+  // Node inside viewport
+  const insideNode = { x: 400, y: 300 };
+  assert.equal(cam.isNodeVisible(insideNode, viewWidth, viewHeight), true);
+
+  // Node completely outside viewport
+  const outsideNode = { x: 2000, y: 2000 };
+  assert.equal(cam.isNodeVisible(outsideNode, viewWidth, viewHeight), false);
+
+  // Node partially on boundary with margin
+  const boundaryNode = { x: 850, y: 300 }; // 850 - 96 = 754 < 800, so intersects even without margin!
+  assert.equal(cam.isNodeVisible(boundaryNode, viewWidth, viewHeight), true);
+
+  // Far node
+  const farNode = { x: 1200, y: 300 };
+  assert.equal(cam.isNodeVisible(farNode, viewWidth, viewHeight), false);
+  assert.equal(cam.isNodeVisible(farNode, viewWidth, viewHeight, 500), true, 'Margin expands visible frustum');
+});

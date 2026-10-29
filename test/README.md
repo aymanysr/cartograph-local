@@ -33,7 +33,18 @@ that naming pattern.
 
 ## Coverage
 
-110 tests across ten files, grouped by the behavior they lock down.
+130 tests across eleven files, grouped by the behavior they lock down:
+- `test/parser.test.js` (12 cases): line parser, exports, blast radius, cycle detection, and `CartographGraph` query facade (ADR-006).
+- `test/agent.test.js` (30 cases): deterministic planner routing, tool execution, model client factory, and grounded synthesis validation.
+- `test/evals.test.js` (16 cases): strict and naive benchmark scoring, weighted summaries, provenance validation, and `evaluateSuite`.
+- `test/evals-ui.test.js` (2 cases): production evals UI lifecycle and execution mode preservation in DOM VM.
+- `test/fit.test.js` (5 cases): world-to-screen coordinate framing, aspect-ratio bounds calculation, and viewport padding.
+- `test/camera.test.js` (7 cases): `CartographCamera` coordinate projections, focal cursor zoom invariance, centering, and stateful `createCamera` spatial queries (frustum culling).
+- `test/layouts.test.js` (3 cases): topological DAG LR/TB layering, directory clustering, and AABB zero-card collision separation.
+- `test/intake.test.js` (10 cases): repository file filtering, binary/hidden/size guards, and snapshot parsing.
+- `test/navigation.test.js` (11 cases): Command Palette search ranking, Unicode ties, and `CartographNavigation` coordinator.
+- `test/replacement.test.js` (13 cases): repository replacement, custom file insertion, and error recovery.
+- `test/render-math.test.js` (7 cases): card border endpoints, adaptive cubic Bézier / linear edge routing, arrival tangent angles, dot grid bounds, cluster hulls, and label disambiguation.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 

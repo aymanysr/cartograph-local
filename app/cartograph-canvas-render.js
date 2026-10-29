@@ -8,6 +8,9 @@
     }
 
     function graphCardEndpoint(node, other) {
+      if (typeof CartographRenderMath !== 'undefined') {
+        return CartographRenderMath.computeCardEndpoint(node, other);
+      }
       const bounds = getGraphNodeBounds(node);
       const dx = other.x - node.x, dy = other.y - node.y;
       const scale = 1 / Math.max(Math.abs(dx) / ((bounds.maxX - bounds.minX) / 2), Math.abs(dy) / ((bounds.maxY - bounds.minY) / 2), 1);
@@ -24,16 +27,20 @@
       ctx.translate(state.camera.x,state.camera.y);ctx.scale(state.camera.zoom,state.camera.zoom);
 
       // 1. Subtle World-Space Dot Grid for Spatial Grounding (batched path - S3/D7)
-      const dotSpacing = 36;
-      const startX = Math.floor((-state.camera.x / state.camera.zoom) / dotSpacing) * dotSpacing - dotSpacing;
-      const endX = startX + (W / state.camera.zoom) + dotSpacing * 2;
-      const startY = Math.floor((-state.camera.y / state.camera.zoom) / dotSpacing) * dotSpacing - dotSpacing;
-      const endY = startY + (H / state.camera.zoom) + dotSpacing * 2;
+      const grid = (typeof CartographRenderMath !== 'undefined')
+        ? CartographRenderMath.computeDotGridBounds(state.camera, W, H, 36)
+        : {
+            dotSpacing: 36,
+            startX: Math.floor((-state.camera.x / state.camera.zoom) / 36) * 36 - 36,
+            endX: Math.floor((-state.camera.x / state.camera.zoom) / 36) * 36 - 36 + (W / state.camera.zoom) + 72,
+            startY: Math.floor((-state.camera.y / state.camera.zoom) / 36) * 36 - 36,
+            endY: Math.floor((-state.camera.y / state.camera.zoom) / 36) * 36 - 36 + (H / state.camera.zoom) + 72,
+          };
 
       ctx.fillStyle = '#222228';
       ctx.beginPath();
-      for (let gx = startX; gx <= endX; gx += dotSpacing) {
-        for (let gy = startY; gy <= endY; gy += dotSpacing) {
+      for (let gx = grid.startX; gx <= grid.endX; gx += grid.dotSpacing) {
+        for (let gy = grid.startY; gy <= grid.endY; gy += grid.dotSpacing) {
           ctx.rect(gx, gy, 1.2, 1.2);
         }
       }
@@ -63,49 +70,50 @@
       }
 
       // Check for colliding basenames across files (D8 cached - S3)
-      let basenameCount = state.graph._basenameCount;
-      if (!basenameCount || state.graph._basenameCountNodes !== state.graph.nodes) {
-        basenameCount = new Map();
-        for (let i = 0; i < state.graph.nodes.length; i++) {
-          const bn = state.graph.nodes[i].path.split('/').pop();
-          basenameCount.set(bn, (basenameCount.get(bn) || 0) + 1);
+      let labelMap = state.graph._labelMap;
+      if (!labelMap || state.graph._labelMapNodes !== state.graph.nodes) {
+        if (typeof CartographRenderMath !== 'undefined') {
+          labelMap = CartographRenderMath.disambiguateNodeLabels(state.graph.nodes);
+        } else {
+          const counts = new Map();
+          for (let i = 0; i < state.graph.nodes.length; i++) {
+            const bn = state.graph.nodes[i].path.split('/').pop();
+            counts.set(bn, (counts.get(bn) || 0) + 1);
+          }
+          labelMap = new Map();
+          for (let i = 0; i < state.graph.nodes.length; i++) {
+            const parts = state.graph.nodes[i].path.split('/');
+            const baseName = parts[parts.length - 1];
+            const isColliding = (counts.get(baseName) || 0) > 1;
+            const displayLabel = isColliding && parts.length > 1 ? `${parts[parts.length - 2]}/${baseName}` : baseName;
+            labelMap.set(state.graph.nodes[i].path, { baseName, displayLabel, isColliding });
+          }
         }
-        state.graph._basenameCount = basenameCount;
-        state.graph._basenameCountNodes = state.graph.nodes;
+        state.graph._labelMap = labelMap;
+        state.graph._labelMapNodes = state.graph.nodes;
       }
 
       // 2. Directory Cluster Region Watermarks (Cluster mode)
       const isClusterMode = state.graphLayout === 'force' || state.graphLayout === 'cluster';
       if (isClusterMode && state.graph.nodes.length) {
-        const dirGroups = new Map();
-        for (const n of state.graph.nodes) {
-          const dir = (typeof CartographLayouts !== 'undefined') ? CartographLayouts.getEffectiveDirectory(n.path) : (n.path.split('/')[0] || 'root');
-          if (!dirGroups.has(dir)) dirGroups.set(dir, []);
-          dirGroups.get(dir).push(n);
-        }
-        for (const [dir, dNodes] of dirGroups.entries()) {
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-          for (const dn of dNodes) {
-            const b = getGraphNodeBounds(dn);
-            if (b.minX < minX) minX = b.minX;
-            if (b.minY < minY) minY = b.minY;
-            if (b.maxX > maxX) maxX = b.maxX;
-            if (b.maxY > maxY) maxY = b.maxY;
-          }
-          const pad = 24;
+        const getDir = (p) => (typeof CartographLayouts !== 'undefined' ? CartographLayouts.getEffectiveDirectory(p) : (p.split('/')[0] || 'root'));
+        const hulls = (typeof CartographRenderMath !== 'undefined')
+          ? CartographRenderMath.computeClusterHulls(state.graph.nodes, getDir, 24)
+          : [];
+        for (const hull of hulls) {
           ctx.save();
           ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
           ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.roundRect(minX - pad, minY - pad - 18, (maxX - minX) + pad * 2, (maxY - minY) + pad * 2 + 18, 12);
+          ctx.roundRect(hull.bounds.x, hull.bounds.y, hull.bounds.width, hull.bounds.height, 12);
           ctx.fill();
           ctx.stroke();
 
           ctx.fillStyle = '#94a3b8'; // WCAG AA compliant contrast (D2)
           ctx.font = '600 11px "JetBrains Mono", monospace';
           ctx.textAlign = 'left';
-          ctx.fillText(`📁 ${dir}/ (${dNodes.length})`, minX - pad + 12, minY - pad - 2);
+          ctx.fillText(`📁 ${hull.directory}/ (${hull.nodeCount})`, hull.bounds.labelX, hull.bounds.labelY);
           ctx.restore();
         }
       }
@@ -114,68 +122,25 @@
       const isLRMode = state.graphLayout === 'dag' || state.graphLayout === 'dag-lr';
       const isTBMode = state.graphLayout === 'dag-tb';
 
-      if (isLRMode && state.graph.nodes.length) {
-        const rankColMap = new Map();
-        for (const n of state.graph.nodes) {
-          const r = n.rank !== undefined ? n.rank : 0;
-          if (!rankColMap.has(r)) rankColMap.set(r, []);
-          rankColMap.get(r).push(n);
-        }
-        const sortedRanks = Array.from(rankColMap.keys()).sort((a, b) => a - b);
-        const maxRank = sortedRanks[sortedRanks.length - 1] || 0;
-
-        sortedRanks.forEach((r) => {
-          const rNodes = rankColMap.get(r);
-          const colX = (r - maxRank / 2) * 260;
-          const minY = Math.min(...rNodes.map(n => n.y));
-          const maxY = Math.max(...rNodes.map(n => n.y));
-
+      if ((isLRMode || isTBMode) && state.graph.nodes.length) {
+        const guides = (typeof CartographRenderMath !== 'undefined')
+          ? CartographRenderMath.computePipelineGuides(state.graph.nodes, isLRMode ? 'dag-lr' : 'dag-tb')
+          : [];
+        for (const guide of guides) {
           ctx.save();
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.moveTo(colX, minY - 60);
-          ctx.lineTo(colX, maxY + 60);
+          ctx.moveTo(guide.line.x1, guide.line.y1);
+          ctx.lineTo(guide.line.x2, guide.line.y2);
           ctx.stroke();
 
           ctx.fillStyle = '#94a3b8'; // WCAG AA compliant (D2)
           ctx.font = '600 10px "JetBrains Mono", monospace';
-          ctx.textAlign = 'center';
-          const stageName = r === 0 ? 'ENTRY POINTS' : r === maxRank ? 'LEAF & CORE' : `TIER ${r}`;
-          ctx.fillText(stageName, colX, minY - 44);
+          ctx.textAlign = guide.labelPos.align;
+          ctx.fillText(guide.label, guide.labelPos.x, guide.labelPos.y);
           ctx.restore();
-        });
-      } else if (isTBMode && state.graph.nodes.length) {
-        const rankRowMap = new Map();
-        for (const n of state.graph.nodes) {
-          const r = n.rank !== undefined ? n.rank : 0;
-          if (!rankRowMap.has(r)) rankRowMap.set(r, []);
-          rankRowMap.get(r).push(n);
         }
-        const sortedRanks = Array.from(rankRowMap.keys()).sort((a, b) => a - b);
-        const maxRank = sortedRanks[sortedRanks.length - 1] || 0;
-
-        sortedRanks.forEach((r) => {
-          const rNodes = rankRowMap.get(r);
-          const rowY = (r - maxRank / 2) * 110;
-          const minX = Math.min(...rNodes.map(n => n.x));
-          const maxX = Math.max(...rNodes.map(n => n.x));
-
-          ctx.save();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(minX - 60, rowY);
-          ctx.lineTo(maxX + 60, rowY);
-          ctx.stroke();
-
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '600 10px "JetBrains Mono", monospace';
-          ctx.textAlign = 'right';
-          const stageName = r === 0 ? 'ENTRY' : r === maxRank ? 'CORE' : `TIER ${r}`;
-          ctx.fillText(stageName, minX - 70, rowY + 3);
-          ctx.restore();
-        });
       }
 
       // 4. Edges with Adaptive Routing & Arrival Tangent Arrowheads (D3, S1)
@@ -226,39 +191,60 @@
         ctx.strokeStyle = strokeColor;
         ctx.lineWidth = strokeWidth;
 
+        const geom = (typeof CartographRenderMath !== 'undefined')
+          ? CartographRenderMath.computeEdgeGeometry(source, target, state.graphLayout)
+          : null;
+
         let arrivalAngle = 0;
         ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-
-        if (isLRMode) {
-          // Horizontal flow
-          const dx = end.x - start.x;
-          const cpOffset = Math.min(100, Math.max(30, Math.abs(dx) * 0.45));
-          const cp1x = start.x + (dx >= 0 ? cpOffset : -cpOffset), cp1y = start.y;
-          const cp2x = end.x - (dx >= 0 ? cpOffset : -cpOffset), cp2y = end.y;
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, end.x, end.y);
-          arrivalAngle = Math.atan2(end.y - cp2y, end.x - cp2x);
-        } else if (isTBMode) {
-          // Vertical flow (Fix S1/D3 S-curve bug)
-          const dy = end.y - start.y;
-          const cpOffset = Math.min(100, Math.max(30, Math.abs(dy) * 0.45));
-          const cp1x = start.x, cp1y = start.y + (dy >= 0 ? cpOffset : -cpOffset);
-          const cp2x = end.x, cp2y = end.y - (dy >= 0 ? cpOffset : -cpOffset);
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, end.x, end.y);
-          arrivalAngle = Math.atan2(end.y - cp2y, end.x - cp2x);
+        if (geom && geom.type === 'bezier') {
+          ctx.moveTo(geom.start.x, geom.start.y);
+          ctx.bezierCurveTo(
+            geom.controlPoints[0].x, geom.controlPoints[0].y,
+            geom.controlPoints[1].x, geom.controlPoints[1].y,
+            geom.end.x, geom.end.y
+          );
+          arrivalAngle = geom.arrivalAngle;
+        } else if (geom && geom.type === 'line') {
+          ctx.moveTo(geom.start.x, geom.start.y);
+          ctx.lineTo(geom.end.x, geom.end.y);
+          arrivalAngle = geom.arrivalAngle;
         } else {
-          // Cluster mode: clean straight line
-          ctx.lineTo(end.x, end.y);
-          arrivalAngle = Math.atan2(end.y - start.y, end.x - start.x);
+          ctx.moveTo(start.x, start.y);
+          if (isLRMode) {
+            const dx = end.x - start.x;
+            const cpOffset = Math.min(100, Math.max(30, Math.abs(dx) * 0.45));
+            const cp1x = start.x + (dx >= 0 ? cpOffset : -cpOffset), cp1y = start.y;
+            const cp2x = end.x - (dx >= 0 ? cpOffset : -cpOffset), cp2y = end.y;
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, end.x, end.y);
+            arrivalAngle = Math.atan2(end.y - cp2y, end.x - cp2x);
+          } else if (isTBMode) {
+            const dy = end.y - start.y;
+            const cpOffset = Math.min(100, Math.max(30, Math.abs(dy) * 0.45));
+            const cp1x = start.x, cp1y = start.y + (dy >= 0 ? cpOffset : -cpOffset);
+            const cp2x = end.x, cp2y = end.y - (dy >= 0 ? cpOffset : -cpOffset);
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, end.x, end.y);
+            arrivalAngle = Math.atan2(end.y - cp2y, end.x - cp2x);
+          } else {
+            ctx.lineTo(end.x, end.y);
+            arrivalAngle = Math.atan2(end.y - start.y, end.x - start.x);
+          }
         }
         ctx.stroke();
 
         // Arrowhead perfectly aligned with arrival tangent angle
         ctx.fillStyle = strokeColor;
         ctx.beginPath();
-        ctx.moveTo(end.x, end.y);
-        ctx.lineTo(end.x - 7 * Math.cos(arrivalAngle - 0.45), end.y - 7 * Math.sin(arrivalAngle - 0.45));
-        ctx.lineTo(end.x - 7 * Math.cos(arrivalAngle + 0.45), end.y - 7 * Math.sin(arrivalAngle + 0.45));
+        if (typeof CartographRenderMath !== 'undefined') {
+          const arrowPts = CartographRenderMath.computeArrowheadPoints(geom ? geom.end : end, arrivalAngle, 7, 0.45);
+          ctx.moveTo(arrowPts[0].x, arrowPts[0].y);
+          ctx.lineTo(arrowPts[1].x, arrowPts[1].y);
+          ctx.lineTo(arrowPts[2].x, arrowPts[2].y);
+        } else {
+          ctx.moveTo(end.x, end.y);
+          ctx.lineTo(end.x - 7 * Math.cos(arrivalAngle - 0.45), end.y - 7 * Math.sin(arrivalAngle - 0.45));
+          ctx.lineTo(end.x - 7 * Math.cos(arrivalAngle + 0.45), end.y - 7 * Math.sin(arrivalAngle + 0.45));
+        }
         ctx.closePath();
         ctx.fill();
 
@@ -342,18 +328,16 @@
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
 
-        const parts = node.path.split('/');
-        const baseName = parts[parts.length - 1];
-        const isColliding = (basenameCount.get(baseName) || 0) > 1;
-        let displayLabel = isColliding && parts.length > 1
-          ? `${parts[parts.length - 2]}/${baseName}`
-          : baseName;
+        const labelInfo = labelMap.get(node.path);
+        const baseName = labelInfo ? labelInfo.baseName : node.path.split('/').pop();
+        let displayLabel = labelInfo ? labelInfo.displayLabel : baseName;
+        const isColliding = labelInfo ? labelInfo.isColliding : false;
 
         ctx.font = '500 11px "JetBrains Mono", monospace';
         ctx.fillStyle = '#ffffff';
 
         while (displayLabel.length && ctx.measureText(displayLabel).width > 156) displayLabel = displayLabel.slice(0, -1);
-        if (displayLabel !== baseName && (!isColliding || displayLabel !== `${parts[parts.length - 2]}/${baseName}`)) {
+        if (displayLabel !== baseName && (!isColliding || displayLabel !== (labelInfo ? labelInfo.displayLabel : ''))) {
           displayLabel = displayLabel.slice(0, -1) + '…';
         }
 

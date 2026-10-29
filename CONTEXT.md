@@ -121,4 +121,34 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
   - 122/122 tests passing across all suites (`node --test`).
   - Automated headless Playwright end-to-end browser suite passed with 0 console errors, 100% groundedness, and 100% recall.
 
+#### ADR-007: Encapsulated Spatial Camera & Viewport Frustum Model
+- **Status:** Implemented (2026-10-29)
+- **Motivation:**
+  `lib/cartograph-fit.js` previously exposed only stateless projection functions that took loose camera objects `{ x, y, zoom }`. Callers were forced to handle coordinate clamping, zoom state tracking, and had no standard way to determine visible world bounds or perform viewport culling.
+- **Architectural Seams Implemented:**
+  - `CartographCamera.createCamera(initialState)`: Returns an encapsulated stateful camera instance.
+  - Spatial Queries:
+    - `getVisibleWorldBox(viewWidth, viewHeight, margin)`: Calculates the exact world-space bounding box visible in the current viewport.
+    - `isNodeVisible(node, viewWidth, viewHeight, margin)`: High-performance frustum culling predicate.
+    - `isBoxVisible(box, viewWidth, viewHeight, margin)`: AABB visibility test.
+  - Stateful Mutators: `zoomAt(screenPt, factor)`, `panBy(dx, dy)`, `centerOnNode(node, w, h)`, `fitToNodes(nodes, w, h, pad)`, `fitToBox(box, w, h, pad)`.
+  - 100% backward compatibility for all static functions (`CartographCamera.toWorld`, `CartographCamera.toScreen`, `CartographFit.computeFitCamera`).
+
+#### ADR-008: Decoupled Render Math & Geometric Engine
+- **Status:** Implemented (2026-10-29)
+- **Motivation:**
+  Visual rendering logic in `app/cartograph-canvas-render.js` combined HTML5 Canvas context painting with geometric algorithms (card boundary intersection math, layout-dependent Bézier curve control points, arrival tangent trigonometry, dot grid alignment, cluster hulls, and pipeline stage guides). This prevented unit testing of rendering geometry in Node.js test suites.
+- **Architectural Seams Implemented:**
+  - Extracted `lib/cartograph-render-math.js` as the 6th shared, zero-dependency UMD module:
+    - `computeCardEndpoint(node, other)`: Calculates card border intersection points for 192x48 cards.
+    - `computeEdgeGeometry(sourceNode, targetNode, layoutMode)`: Routes cubic Béziers in `dag-lr` and `dag-tb` modes with tangent control points and arrival angles, or straight lines in `cluster` mode.
+    - `computeArrowheadPoints(end, arrivalAngle, arrowLength, arrowAngle)`: Computes exact arrowhead polygon coordinates.
+    - `computeDotGridBounds(camera, viewWidth, viewHeight, dotSpacing)`: Derives aligned world-space grid bounds.
+    - `computeClusterHulls(nodes, getDirectoryFn, pad)`: Computes bounding boxes and labels for directory neighborhoods.
+    - `computePipelineGuides(nodes, layoutMode, spacing)`: Computes column and row guides with topological labels.
+    - `disambiguateNodeLabels(nodes)`: Pre-computes collision-free labels with parent directory prefixes.
+  - `app/cartograph-canvas-render.js` adopts `CartographRenderMath` for all geometric calculations while caching label and node maps on `state.graph` to eliminate 60fps GC pressure.
+- **Verification:**
+  - 130/130 unit tests passing across all 11 test suites (`node --test`).
+
 
