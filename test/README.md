@@ -33,7 +33,7 @@ that naming pattern.
 
 ## Coverage
 
-Fifty-three tests across four files, grouped by the behavior they lock down.
+101 tests across nine files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -95,7 +95,7 @@ run the full public pipeline:
 | `phase-03 spec lists every canonical handler name` | Every `TOOLS` registry key appears verbatim in the phase-03 spec |
 | `the UI AGENT_TOOLS sample lists every canonical handler name` | The demo `AGENT_TOOLS` sample block — wherever it lives in `cartograph.html` or `app/*.js` — contains all six canonical names as string literals |
 
-`test/evals.test.js` (10 cases) — the trace-provenance eval scorer. The PASS
+`test/evals.test.js` (14 cases) — the trace-provenance eval scorer. The PASS
 rule these tests exercise: a case passes only when citation groundedness is
 100% (`0 hallucinated, 0 unproven`) **and** blast-radius recall is exactly
 100%:
@@ -110,7 +110,7 @@ rule these tests exercise: a case passes only when citation groundedness is
 | `naive mode grounds by existence only (no trace provenance)` | `requireProvenance: false` skips the trace check; demo naive lists still fail via invented paths |
 | `recall measures expected coverage, independently of grounding` | Recall formula and the interaction with the PASS rule |
 | `collectTraceFiles unions step files in order and dedupes` | Trace provenance set equals the union of all step files |
-| `computeSuiteSummary aggregates real percentages and average step latency` | Overall groundedness/recall/counts and 1-decimal average step latency |
+| `computeSuiteSummary weights totals rather than averaging case percentages` | Overall groundedness/recall/counts and 1-decimal average step latency |
 | `scoreCase guards against empty citations and empty expectations` | `0 cited` grounds at 100 while recall hits 0; `0 expected` recalls at 100 |
 
 `test/fit.test.js` (5 cases) — the fit-camera contract for
@@ -122,11 +122,15 @@ whole graph lands inside the visible canvas:
 | `fits the layered (dag) world box without clipping and centers it` | A layered (DAG) world fits the canvas with uniform zoom and ends up centered |
 | `fits the force-graph world box (343-node scatter) onto the canvas` | A wide force-layout scatter fits with slack to spare |
 | `zoom clamps to MIN_ZOOM for huge worlds and MAX_ZOOM for specks` | The clamp keeps extreme worlds displayable instead of exploding |
-| `per-side padding keeps the graph clear of the canvas chrome` | Per-side padding reserves the top toolbar and the bottom legend so no node hides behind them |
+| `per-side padding keeps the graph clear of the canvas chrome` | Per-side padding reserves the reserved per-side padding so no node hides behind them |
 | `degenerate boxes fall back to sane cameras` | Empty or one-sided world boxes never produce NaN or inverted cameras |
 
 Parser coverage gap (only): trailing comments on an import line and Python
 triple-quoted strings are not modeled.
+
+`test/ui.test.js` adds nine cases over the actual four shared modules and six classic app scripts, loaded in production order in a Node VM. Bootstrap is suppressed by stubbing listener registration; helpers are evaluated against lexical state with minimal DOM stubs. Cases cover centered 192×48 card bounds, incoming hop edge roles and neutral outbound, deterministic overlap-free preset force layouts, full-path/basename/substring/subsequence ranking, raw-codepoint ties and supplementary Unicode, graph-wide search independent of filters, 50-result cap with full match count, action registry ordering and empty/stale availability.
+
+This VM coverage does not exercise browser layout or native focus/dialog behavior. Real-browser acceptance separately checks direct-file startup, CLI assets, all presets/layouts at 1440/768/390px, keyboard/pointer selection, preserved dragged positions, overlays/focus, source Copy, Docs edits/downloads, ingestion and empty/replacement lifecycle, explicit evals and delayed external-model results. See `.taste-skill/after/` for screenshots/probe metrics and the task reports under `.superpowers/sdd/2026-10-28-quiet-shell-redesign/` for lifecycle evidence.
 
 ## Conventions
 
@@ -189,10 +193,40 @@ test('resolves a new edge case', () => {
 | --- | --- |
 | `parser.test.js` | Parser and CLI tests (11 cases) |
 | `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, synthesis-validation, and cross-surface tool-name consistency tests (27 cases) |
-| `evals.test.js` | Eval provenance scoring and benchmark-case tests (10 cases) |
+| `evals.test.js` | Eval provenance scoring and benchmark-case and complete execution tests (14 cases) |
 | `fit.test.js` | Fit-camera framing tests for `lib/cartograph-fit.js` (5 cases) |
+| `ui.test.js` | Actual-script VM geometry, edge roles, force-layout separation and palette contracts (9 cases) |
 | `README.md` | This guide |
 
 The parser API and graph schema are documented in
 [`../lib/README.md`](../lib/README.md). CLI flags and snapshot format are in
 [`../cli/README.md`](../cli/README.md).
+
+## Repository intake regressions
+
+`intake.test.js` exercises the actual CLI subprocess and production browser
+handler with identical fixtures: CSS/CJS/JSON, Unicode byte boundaries, hidden
+and excluded paths, deceptive directory names, selected and mixed roots,
+duplicates, unreadable paths, all-skipped graph retention, both snapshot forms,
+and bounded accessible report markup. A subprocess filesystem hook simulates
+unreadable siblings, a file growing after stat and a symlink swap before open.
+`ui.test.js` loads the intake library in the same classic-script VM order.
+Run `node --test` for the full suite; browser checks cover native disclosure,
+phone sizing, direct-file startup and CLI server delivery.
+
+`test/replacement.test.js` adds thirteen real-code lifecycle cases: selection/reset/preferences, custom insertion, parser exceptions through three handlers, delayed startup success/failure, delayed model success/failure, and both snapshot forms. The VM supplies DOM boundaries while loading production parser and adoption code.
+
+`navigation.test.js` adds ten production-handler regressions for palette
+pointer/Enter dispatch, inert stale paths, desktop redraw focus and equivalent
+controls, canvas clicks versus returning drags, and file-sheet scroll capture
+before native close. Full suite: 101 cases. Native dialog timing, actual focus,
+responsive navigation at 1440/768/390px, raw special paths and live region/scroll
+preservation are also checked in a real browser; evidence is recorded in
+`/tmp/cartograph-navigation-20261028/report.md`.
+
+
+## Shared Evals execution
+
+`evals.test.js` calls the production `evaluateSuite` seam for full strict and naive runs: actual plans/trace/weighted summary, zero naive planner calls, empty and invalid mode, determinism and graph immutability, and safe caller formatting of special paths. Primitive scorer/provenance/weighted aggregation checks remain independent. Naive fake paths that exist in the graph remain valid existence-only citations.
+
+`evals-ui.test.js` adds two production-script lifecycle tests in a minimal DOM VM: render/view changes never run, explicit Run delegates to the shared suite, same mode preserves the result, real mode and same-count graph adoption clear it, and empty Run stays Not run. No selection/highlight/fetch effects. Real browser desktop/phone expanded trace, answer, special paths and snapshot checks are recorded in `/tmp/cartograph-evals-20261028/report.md`.

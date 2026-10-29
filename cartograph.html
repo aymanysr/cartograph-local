@@ -6,7 +6,8 @@
   <title>Cartograph Local — AST Codebase Intelligence & Impact Graph</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-  <script src="lib/cartograph-parser.js"></script>
+  <script src="lib/cartograph-intake.js"></script>
+<script src="lib/cartograph-parser.js"></script>
   <script src="lib/cartograph-agent.js"></script>
   <script src="lib/cartograph-evals.js"></script>
   <script src="lib/cartograph-fit.js"></script>
@@ -67,7 +68,7 @@
     .file-chip:hover {
       background: rgba(99, 102, 241, 0.28);
       color: #E0E7FF;
-      border-color: #818CF8;
+      border-color: #4a8ad6;
       transform: translateY(-1px);
     }
     .glass-panel {
@@ -75,7 +76,48 @@
       backdrop-filter: blur(12px);
       border: 1px solid rgba(51, 65, 85, 0.65);
     }
-  </style>
+
+    :root { --ground:#171719; --surface:#131217; --raised:#212023; --border:#222224; --rule:#1b1a1f; --control:#3a3a3e; --text:#fff; --muted:#8a8c92; --faint:#5f6065; --accent:#4a8ad6; --rose:#e5566f; --amber:#d9a441; --visited:#5fc39c; --radius:6px; --gap:12px; }
+    html,body {height:100%;margin:0;overflow:hidden;}
+    body {display:grid!important;grid-template-columns:46px minmax(0,1fr);grid-template-rows:40px minmax(0,1fr) 26px;background:var(--ground)!important;color:var(--text);font:13px -apple-system,"SF Pro Text",system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+    button,input,select,textarea {font:inherit;} button {cursor:pointer;} button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {outline:2px solid white;outline-offset:2px;}
+    #shellRail {grid-column:1;grid-row:1/4;display:flex;flex-direction:column;align-items:stretch;background:var(--surface);border-right:1px solid var(--border);padding:8px 0;gap:8px;}
+    #shellRail button {position:relative;height:38px;display:grid;place-items:center;color:var(--muted);} #shellRail button[aria-current="page"] {color:white;} #shellRail button[aria-current="page"]:after{content:"";position:absolute;right:0;top:0;bottom:0;width:1px;background:var(--accent);} #shellRail svg {width:17px;height:17px;} .rail-mark{text-align:center;height:24px;} .rail-settings{margin-top:auto;}
+    #shellTopbar {grid-column:2;grid-row:1;display:flex;align-items:center;gap:12px;padding:0 12px;min-width:0;background:var(--ground);}
+    #shellTopbar button,#shellStatus button,#canvasToolbar button,#compactMapTools button,#phonePaneTabs button {background:transparent;border:0;border-radius:0;color:var(--muted);padding:4px 6px;white-space:nowrap;font-size:12px;box-shadow:none;}
+    #shellTopbar button:hover,#shellStatus button:hover,#canvasToolbar button:hover{background:var(--raised);color:white;} .wordmark{font-size:13px;font-weight:600;margin:0;} .topbar-spacer{flex:1;} #repositorySlot{min-width:0;} #repoPresetSelect{max-width:280px;background:transparent;border:0;color:var(--muted);padding:2px;font-size:11px;border-radius:0;} #repositoryFreshness{color:var(--muted);font-size:11px;white-space:nowrap;} #shellTopbar .primary{background:white;color:var(--surface);border-radius:var(--radius);padding:5px 10px;}
+    #viewExplorer,#viewEvals,#viewSpecs {grid-column:2;grid-row:2;min-height:0;min-width:0;background:var(--ground);} #viewExplorer{flex-direction:row;} #fileBrowser{width:236px;max-height:none;min-height:0;background:var(--surface);border:0;} #inspectorRegion{width:300px;max-height:none;min-height:0;background:var(--surface);border:0;} #mapRegion{min-width:0;min-height:0;background:var(--ground);} #canvasToolbar{position:absolute;right:12px;top:8px;display:flex;gap:4px;z-index:20;} #graphCanvasContainer{min-height:0;} #shellStatus{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-top:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;} #shellStatus button{font:inherit;} .status-zoom{display:flex;align-items:center;gap:8px;} .compact-only,#compactMapTools,#phonePaneTabs{display:none;}
+    dialog {background:var(--surface);color:white;border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-height:calc(100dvh - 32px);max-width:calc(100vw - 32px);} dialog:modal{overscroll-behavior:contain;} dialog::backdrop{background:rgba(0,0,0,.5);overflow:hidden;overscroll-behavior:contain;} dialog:not([open]){display:none!important;} #shellOverlay{width:360px;} .sheet-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;} .sheet-heading h2{font-size:13px;font-weight:500;} .sheet-heading button{color:var(--muted);} #shellOverlayBody{min-height:0;overflow:auto;} #shellOverlayBody>#fileBrowser,#shellOverlayBody>#inspectorRegion{width:100%;height:calc(100dvh - 130px);} #navigationContent:not([hidden]){display:flex;flex-direction:column;gap:4px;} #navigationContent button{text-align:left;padding:12px;color:var(--muted);} #navigationContent select{width:100%;max-width:100%;margin-bottom:12px;} .form-dialog{width:600px;padding:0;} .form-dialog>div{max-width:none;background:var(--surface);border:0;border-radius:var(--radius);box-shadow:none;} [hidden]{display:none!important;}
+    .inspector-tab{flex:1;padding:10px 4px;color:var(--muted);position:relative;font-size:12px;} .inspector-tab[aria-selected="true"]{color:white;} .inspector-tab[aria-selected="true"]:after{content:"";position:absolute;bottom:0;left:25%;width:50%;height:1px;background:var(--accent);} .inspector-tab svg,.inspector-tab>span:nth-of-type(2){display:none;}
+    @media(max-width:1100px){body{grid-template-columns:minmax(0,1fr);grid-template-rows:48px minmax(0,1fr) 26px;} #shellRail{display:none;} #shellTopbar,#viewExplorer,#viewEvals,#viewSpecs,#shellStatus{grid-column:1;} #shellTopbar{gap:8px;} .compact-only{display:block;} #repositorySlot,#repositoryFreshness{display:none;} #compactMapTools{display:flex;position:absolute;left:12px;top:56px;z-index:20;gap:8px;} #compactMapTools button{background:var(--surface);} #fileBrowser,#inspectorRegion{display:none;} #shellOverlayBody>#fileBrowser,#shellOverlayBody>#inspectorRegion{display:flex;} #canvasToolbar{top:8px;} #canvasToolbar #toggleInspectorBtn{display:none;}}
+    @media(max-width:640px){body{grid-template-rows:48px 44px minmax(0,1fr) 26px;font-size:14px;} #shellTopbar{padding:0 16px;} #shellTopbar .desktop-detail{display:none;} #shellTopbar button{min-height:44px;font-size:14px;} #phonePaneTabs{grid-column:1;grid-row:2;display:flex;align-items:stretch;background:var(--surface);} #phonePaneTabs button{flex:1;font-size:14px;position:relative;} #phonePaneTabs button[aria-selected="true"]{color:white;} #phonePaneTabs button[aria-selected="true"]:after{content:"";position:absolute;bottom:0;width:30px;left:calc(50% - 15px);height:1px;background:var(--accent);} #viewExplorer,#viewEvals,#viewSpecs{grid-row:3;} #shellStatus{grid-row:4;font-size:11px;} .status-hotspot,.status-zoom,#compactMapTools{display:none!important;} #fileBrowser,#inspectorRegion{width:100%;} #viewExplorer>[data-phone-visible="true"]{display:flex!important;} #viewExplorer>[data-phone-visible="false"]{display:none!important;} #canvasToolbar{left:8px;right:8px;justify-content:flex-end;gap:0;} #canvasToolbar button{min-width:44px;min-height:44px;font-size:12px;} #canvasToolbar #toggleInspectorBtn{display:none;} #fileBrowser button,#fileBrowser input,#inspectorRegion button,dialog button,dialog input,dialog select{min-height:44px;} #fileListContainer button{padding-top:8px;padding-bottom:8px;} #fileListContainer button div{font-size:12px;} #fileListContainer button div>div:first-child{font-size:14px;} #inspectorRegion>div:first-child{display:none;} #viewEvals,#viewSpecs{padding:16px;} #viewSpecs .grid{display:flex;flex-direction:column;} textarea{max-width:100%;} }
+
+    .file-browser-controls{padding:12px;display:grid;gap:12px}.file-browser-heading,.file-sort{display:flex;justify-content:space-between;font-size:12px}.file-browser-controls input{width:100%;background:transparent;border:1px solid var(--control);border-radius:6px;padding:6px;font-size:11px}.file-sort button{position:relative;padding-bottom:6px;color:var(--muted)}.file-row{display:flex;width:100%;height:30px;align-items:center;justify-content:space-between;padding:0 12px;border-left:1px solid transparent;font:11px 'JetBrains Mono',monospace;gap:12px}.file-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row[aria-current=true]{background:var(--raised);border-left-color:var(--accent)}.file-impact{color:var(--muted)}.file-impact.nonzero{color:var(--rose)}.folder-heading{font-size:11px;color:var(--muted);padding:12px 12px 6px}.impact-content{padding:16px;font-size:13px;line-height:1.6}.impact-content h1{font:500 13px 'JetBrains Mono',monospace;overflow-wrap:anywhere}.impact-context,#inspectorImpactCaption{font-size:11px;color:var(--muted)}.impact-headline{font:400 30px 'JetBrains Mono',monospace;margin-top:18px}.impact-kpis{display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--border);margin:16px 0;padding:12px 0;gap:8px}.impact-kpis span{display:block;font:400 16px 'JetBrains Mono',monospace}.impact-kpis label{display:block;color:var(--muted);font-size:11px}.impact-content section{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}.impact-content h2{font-size:12px;font-weight:500}.impact-content h2 span{float:right;color:var(--muted);font:11px 'JetBrains Mono',monospace}.impact-content pre{padding-right:4px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 'JetBrains Mono',monospace;overflow:auto;max-height:300px}.impact-content details{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}.file-chip{font:11px 'JetBrains Mono',monospace!important;color:var(--text)!important;background:transparent!important;border:0!important;border-bottom:1px solid var(--control)!important;border-radius:0!important;padding:0 2px!important;overflow-wrap:anywhere}.impact-content [class*=text-]{font-size:11px}.impact-content [class*=bg-]{background:transparent!important}.impact-content [class*=text-cyan],.impact-content [class*=text-emerald],.impact-content [class*=text-indigo]{color:var(--text)!important}.impact-content [class*=text-rose]{color:var(--rose)!important}.impact-content [class*=text-amber]{color:var(--amber)!important}#fileListContainer{padding:0!important;gap:0!important}.impact-content .text-\[10px\]{font-size:11px!important}.impact-content strong{font-weight:500}#inspectorHop1Count:not(:empty){color:var(--rose)}#inspectorHop2Count:not(:empty){color:var(--amber)}.impact-content{font-weight:400!important}@media(max-width:640px){.file-row{min-height:44px;height:44px;font-size:14px}.file-browser-controls input,.file-sort,.impact-content,.impact-content h1{font-size:14px}.impact-content [class*=text-],.impact-context,#inspectorImpactCaption,.file-chip{font-size:12px!important}.impact-kpis label{font-size:12px}}
+
+    .file-sort button[aria-pressed=true]{color:var(--text)}.file-sort button[aria-pressed=true]:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--accent)}.impact-kpis span[data-zero=true]{color:var(--muted)!important}#panelInspectorContent #inspectorFilePath{font-weight:500!important}.impact-content .file-chip{font-weight:400!important}
+  #shellOverlay:has(#commandPalette:not([hidden])){width:600px;border-radius:12px;padding:16px;} #commandPalette{display:flex;flex-direction:column;gap:12px;} .palette-modes{display:flex;gap:12px;} .palette-modes [aria-pressed="true"]{color:var(--text);border-bottom:1px solid var(--text);} #paletteInput{width:100%;padding:12px;background:var(--ground);border:1px solid var(--control);border-radius:6px;color:white;font-size:14px;} #paletteResults{max-height:55dvh;overflow:auto;} #paletteResults button{display:block;width:100%;text-align:left;padding:12px;font-size:14px;border-bottom:1px solid var(--rule);overflow-wrap:anywhere;} #paletteResults [data-filepath]{font-family:var(--mono);} #paletteResults [aria-selected="true"]{outline:1px solid var(--control);outline-offset:-1px;background:var(--raised);} #paletteResults [aria-disabled="true"]{color:var(--muted);} #paletteResults small{display:block;font-size:12px;color:var(--muted);margin-top:4px;} #paletteCount{font-size:12px;color:var(--muted);}
+
+.quiet-pane{padding:32px;overflow:auto;min-width:0}.pane-title{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:32px}.pane-title h1{font-size:26px;font-weight:600}.pane-title p,.form-dialog p{color:var(--muted);margin-top:8px}.pane-actions,.eval-controls{display:flex;align-items:center;gap:12px}.quiet-pane button,.form-dialog button,#panelAgentContent button{border:1px solid var(--control);border-radius:6px;padding:8px 12px;background:transparent;color:white}.quiet-pane .primary,.form-dialog .primary{background:white;color:var(--ground);border-color:white}.eval-controls{margin-bottom:24px}.eval-controls button[aria-pressed="true"]{border-color:white}.eval-controls span{color:var(--muted)}.eval-scores{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-bottom:32px}.eval-scores p{color:var(--muted)}.eval-scores small{font-size:12px;color:var(--muted)}.eval-scores div>div{font:400 36px 'JetBrains Mono',monospace;text-align:right;margin-top:12px;font-variant-numeric:tabular-nums}.eval-case{border-top:1px solid var(--border)}.eval-case summary{padding:16px 0;cursor:pointer;display:flex;justify-content:space-between;gap:24px}.case-metrics{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:12px;white-space:nowrap}.case-evidence{padding:0 0 24px;line-height:1.7}.case-evidence h3,.agent-run h3{color:var(--muted);font-weight:400;font-size:12px;margin:16px 0 8px}.trace-row{font:12px/1.7 'JetBrains Mono',monospace;border-bottom:1px solid var(--rule);padding:12px 0;overflow-wrap:anywhere}.trace-row p{color:var(--muted)}.eval-empty{color:var(--muted);padding:24px 0}.docs-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px}.docs-layout nav button{display:block;width:100%;text-align:left;border:0;border-radius:0;border-left:1px solid transparent;font-family:'JetBrains Mono',monospace}.docs-layout nav button[aria-current="true"]{border-left-color:var(--accent)}.docs-layout small{display:block;color:var(--muted);font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin-top:4px}.doc-editor{border:1px solid var(--border);border-radius:6px;overflow:hidden}.doc-editor header{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--border)}.doc-editor textarea{display:block;width:100%;height:520px;padding:16px;background:var(--surface);color:white;font:12px/1.7 'JetBrains Mono',monospace;border:0;resize:vertical}.form-dialog form{padding:24px;display:flex;flex-direction:column;gap:12px}.form-dialog header,.form-dialog footer{display:flex;align-items:center;gap:12px}.form-dialog header{justify-content:space-between}.form-dialog h2{font-size:18px;font-weight:500}.form-dialog footer{margin-top:12px;flex-wrap:wrap}.form-dialog footer span{flex:1}.form-dialog input,.form-dialog select,.form-dialog textarea,#agentQuestionInput{background:var(--ground);color:white;border:1px solid var(--control);border-radius:6px;padding:8px 12px;min-width:0;width:100%;font:13px 'JetBrains Mono',monospace}.form-dialog input,.form-dialog select{height:40px}.settings-fields{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;gap:12px}.quiet-toast{background:var(--surface);border:1px solid var(--control);border-radius:6px;padding:12px;font-size:13px;max-width:440px;white-space:pre-wrap;overflow-wrap:anywhere;transition:opacity 150ms}.quiet-toast[data-kind="warn"]{border-left-color:var(--amber)}#panelAgentContent{min-height:0;flex-direction:column}#panelAgentContent:not(.hidden){display:flex}#panelAgentContent>div:first-child{padding:16px;border-bottom:1px solid var(--border)}#panelAgentContent>div:first-child>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}#panelAgentContent .ask-scroll{flex:1;overflow:auto;padding:16px}#panelAgentContent p{color:var(--muted);line-height:1.7}#panelAgentContent form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}#agentQuestionInput{flex:1;min-height:40px}.agent-run{border-top:1px solid var(--border);padding:16px 0;overflow-wrap:anywhere}.agent-run header{display:flex;justify-content:space-between;gap:12px}.agent-run header span{color:var(--muted);font:12px 'JetBrains Mono',monospace}.agent-run strong{font-weight:500}.agent-answer{line-height:1.7}
+#agentPresetButtons button{border:0;border-radius:0;text-align:left}#agentPresetButtons button:hover{background:var(--raised);color:var(--text)}
+@media(max-width:640px){.quiet-pane{padding:16px}.pane-title{flex-direction:column;gap:16px;margin-bottom:24px}.eval-scores{grid-template-columns:1fr 1fr;gap:24px 12px}.eval-scores p{font-size:14px}.eval-case summary{flex-direction:column;gap:8px}.case-metrics{font-size:12px;white-space:normal}.docs-layout{display:flex;flex-direction:column;gap:16px}.docs-layout nav{display:flex;flex-wrap:wrap}.docs-layout nav button{width:auto;font-size:14px}.docs-layout small{font-size:12px}.form-dialog form{padding:16px}.settings-fields{grid-template-columns:1fr;gap:8px}.form-dialog input,.form-dialog select,.form-dialog label,.form-dialog p,.quiet-pane button,.agent-run{font-size:14px}.trace-row,.agent-run h3{font-size:12px}.pane-actions{flex-wrap:wrap}}
+
+    .docs-layout nav small{font-size:11px;}@media(max-width:640px){.docs-layout nav small{font-size:12px;}}
+@media(max-width:640px){.quiet-pane button,.impact-content summary{min-height:44px;min-width:44px;}.impact-content summary{display:flex;align-items:center;}}
+
+    :root{--mono:'JetBrains Mono',monospace}
+    #canvasToolbar button[aria-pressed="true"]{color:var(--text)!important;border-bottom:1px solid var(--text)!important;background:var(--raised)!important}
+    .simulation-notice{display:flex;align-items:center;gap:10px;padding:8px 14px;border:1px solid var(--control);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;box-shadow:none;backdrop-filter:none}
+    .required-muted{color:var(--muted)}
+    #inspectorExportsList{display:flex;flex-wrap:wrap;gap:8px;padding-top:12px}.export-symbol{font:11px var(--mono);overflow-wrap:anywhere}
+    #inspectorSourceCode{box-sizing:border-box;width:100%;max-width:100%;padding:0 8px 0 0;overflow-x:hidden;overflow-y:auto;white-space:normal}
+    .source-row{display:block;max-width:100%;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;margin:0;padding:0;border:0}
+    .source-line-number{color:var(--muted);user-select:none;margin-right:8px}
+    .source-import{border-left:1px solid var(--control);padding-left:4px}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}.file-chip:hover{transform:none!important}}
+#intakeReport{position:fixed;right:12px;bottom:30px;z-index:35;max-width:calc(100vw - 24px);width:420px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text)}
+#intakeReport summary{cursor:pointer;padding:12px;min-height:44px;box-sizing:border-box}#intakeReport summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.intake-body{padding:0 12px 12px;max-height:45vh;overflow:auto;overflow-wrap:anywhere}.intake-body ul{list-style:disc;padding-left:18px}.intake-body p{margin-bottom:8px}
+</style>
 </head>
 <body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 select-none">
 
@@ -83,174 +125,41 @@
   <input id="localFolderInput" type="file" webkitdirectory directory multiple class="hidden" onchange="handleLocalFolderUpload(event)" />
   <input id="localFilesInput" type="file" multiple accept=".ts,.tsx,.js,.jsx,.mjs,.py,.go,.json,.css,.md" class="hidden" onchange="handleLocalFilesUpload(event)" />
 
-  <!-- Top Navigation Header -->
-  <header class="h-14 border-b border-slate-800/90 bg-slate-925/95 px-3 lg:px-5 flex items-center justify-between gap-2 shrink-0 z-30">
-    <div class="flex items-center gap-3 min-w-0">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
-        <i data-lucide="network" class="w-4 h-4 text-white"></i>
-      </div>
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="font-bold text-sm tracking-tight text-white">Cartograph</span>
-          <span class="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Local AST Engine</span>
-        </div>
-        <p class="text-[11px] text-slate-400 hidden sm:block truncate">Every edge is parsed from real code — never guessed by AI</p>
-      </div>
-    </div>
-
-    <!-- Main View Switcher Tabs -->
-    <nav class="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800">
-      <button id="navTabExplorer" type="button" onclick="switchMainView('explorer')" class="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all bg-indigo-600 text-white shadow-sm">
-        <i data-lucide="git-fork" class="w-3.5 h-3.5"></i>
-        <span>Dependency Map</span>
-      </button>
-      <button id="navTabEvals" type="button" onclick="switchMainView('evals')" class="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all text-slate-300 hover:text-white">
-        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-        <span>Agent Evals</span>
-        <span id="headerEvalScoreBadge" class="ml-1 px-1.5 py-0.2 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">100%</span>
-      </button>
-      <button id="navTabSpecs" type="button" onclick="switchMainView('specs')" class="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all text-slate-300 hover:text-white">
-        <i data-lucide="file-code-2" class="w-3.5 h-3.5"></i>
-        <span>PROJECT.md &amp; CLAUDE.md</span>
-      </button>
-    </nav>
-
-    <!-- Repo Selector & Local Folder Upload -->
-    <div class="flex items-center gap-2">
-      <div class="relative flex items-center">
-        <select id="repoPresetSelect" onchange="handlePresetChange(this.value)" aria-label="Select Repository" class="bg-slate-900 border border-slate-700/80 hover:border-slate-600 text-slate-200 text-xs rounded-lg pl-2.5 pr-7 py-1.5 font-mono focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer">
+  <nav id="shellRail" aria-label="Main navigation"><span class="rail-mark" aria-hidden="true">⑂</span>
+<button id="navTabExplorer" title="Dependency Map" aria-label="Dependency Map" onclick="switchMainView('explorer')"><i data-lucide="git-fork"></i></button>
+<button id="navTabEvals" title="Agent Evals" aria-label="Agent Evals" onclick="switchMainView('evals')"><i data-lucide="shield-check"></i><span id="headerEvalScoreBadge" hidden></span></button>
+<button id="navTabSpecs" title="Docs & Rules" aria-label="Docs & Rules" onclick="switchMainView('specs')"><i data-lucide="file-code-2"></i></button>
+<button id="btnOpenSettings" class="rail-settings" title="Settings" aria-label="Settings" onclick="openSettingsModal()"><i data-lucide="settings"></i></button></nav>
+<header id="shellTopbar"><button id="navigationLauncher" class="compact-only" onclick="openUiOverlay('navigation', this)">Menu</button><h1 class="wordmark">Cartograph</h1><div id="repositorySlot"><select id="repoPresetSelect" onchange="handlePresetChange(this.value)" aria-label="Select Repository" class="bg-slate-900 border border-slate-700/80 hover:border-slate-600 text-slate-200 text-xs rounded-lg pl-2.5 pr-7 py-1.5 font-mono focus:outline-none focus:border-slate-500 transition-colors cursor-pointer">
           <option value="cartograph-saas">repo: cartograph-nextjs-saas (16 files)</option>
           <option value="fintech-ledger">repo: fintech-checkout-service (11 files)</option>
           <option value="python-agent">repo: python-rag-orchestrator (9 files)</option>
-        </select>
-      </div>
-
-      <button id="btnOpenLocalFolder" type="button" onclick="triggerFolderUpload()" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-medium flex items-center gap-1.5 transition-all" title="Load a local project directory from your computer">
-        <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
-        <span class="hidden md:inline">Open Local Folder</span>
-      </button>
-
-      <button id="btnAddCustomFile" type="button" onclick="openAddFileModal()" class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 text-xs flex items-center gap-1 transition-all" title="Add or Paste Source File">
-        <i data-lucide="file-plus-2" class="w-3.5 h-3.5"></i>
-      </button>
-
-      <button id="btnOpenSettings" type="button" onclick="openSettingsModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 text-xs font-medium flex items-center gap-1.5 transition-all" title="Configure Local Ollama or OpenAI API">
-        <span id="llmStatusDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-        <span id="llmModeLabel" class="hidden xl:inline font-mono text-[11px]">AST Walker (Local)</span>
-        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-      </button>
-    </div>
-  </header>
-
-  <!-- Sub-header Status & Quick Metrics Strip -->
-  <div class="h-9 border-b border-slate-800/70 bg-slate-900/60 px-4 flex items-center justify-between text-xs shrink-0">
-    <div class="flex items-center gap-4 overflow-x-auto py-1">
-      <div class="flex items-center gap-1.5 text-slate-300 shrink-0">
-        <i data-lucide="files" class="w-3.5 h-3.5 text-indigo-400"></i>
-        <span class="text-slate-400">Parsed Files:</span>
-        <span id="metricTotalFiles" class="font-mono font-semibold text-white">16</span>
-      </div>
-      <div class="flex items-center gap-1.5 text-slate-300 shrink-0">
-        <i data-lucide="git-commit-horizontal" class="w-3.5 h-3.5 text-cyan-400"></i>
-        <span class="text-slate-400">Verified Import Edges:</span>
-        <span id="metricTotalEdges" class="font-mono font-semibold text-white">29</span>
-      </div>
-      <div class="flex items-center gap-1.5 text-slate-300 shrink-0">
-        <i data-lucide="flame" class="w-3.5 h-3.5 text-rose-400"></i>
-        <span class="text-slate-400">Highest Blast Radius:</span>
-        <button id="metricTopHotspotBtn" type="button" onclick="selectTopHotspot()" class="font-mono text-rose-300 hover:text-rose-200 underline decoration-rose-500/50">src/lib/db/supabase.ts (11 files)</button>
-      </div>
-      <div id="metricCycleBadgeContainer" class="flex items-center gap-1.5 shrink-0">
-        <button id="metricCycleBadge" type="button" onclick="handleCycleBadgeClick()" class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">0 Circular Dependencies</button>
-      </div>
-    </div>
-
-    <div class="hidden lg:flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
-      <span>Click any node to inspect its 2-level blast radius</span>
-      <span class="text-slate-600">•</span>
-      <button type="button" onclick="exportGraphSnapshot()" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
-        <i data-lucide="download" class="w-3 h-3"></i>
-        <span>Export Graph JSON</span>
-      </button>
-    </div>
-  </div>
-
+        </select></div><span id="repositoryFreshness" class="desktop-detail">Built-in sample</span><span class="topbar-spacer"></span><button id="commandsLauncher" onclick="openCommandPalette()">Commands <span class="desktop-detail">⌘K</span></button><button id="btnAddCustomFile" class="desktop-detail" onclick="openAddFileModal()">+ Add file</button><button class="desktop-detail" onclick="exportGraphSnapshot()">Export JSON</button><button id="btnOpenLocalFolder" class="desktop-detail primary" onclick="triggerFolderUpload()">Open Folder</button><span id="llmModeLabel" hidden>AST Walker (Local)</span><span id="llmStatusDot" hidden></span></header>
+<div id="compactMapTools"><button onclick="openUiOverlay('files', this)">Files</button><button onclick="openUiOverlay('inspector', this)">Inspector</button></div>
+<nav id="phonePaneTabs" aria-label="Map work region"><button data-pane="files" onclick="setPhonePane('files')">Files</button><button data-pane="map" onclick="setPhonePane('map')">Map</button><button data-pane="impact" onclick="setPhonePane('impact')">Impact</button><button data-pane="ask" onclick="setPhonePane('ask')">Ask</button></nav>
   <!-- ===================================================================== -->
   <!-- VIEW 1: DEPENDENCY MAP & CODEBASE INTELLIGENCE EXPLORER               -->
   <!-- ===================================================================== -->
   <main id="viewExplorer" class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
     <!-- LEFT SIDEBAR: File Explorer, Layer Filter & Blast Radius Ranking -->
-    <aside class="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-slate-800/90 bg-slate-925/80 flex flex-col shrink-0 max-h-72 lg:max-h-none">
-      <div class="p-3 border-b border-slate-800/80 space-y-2.5">
-        <div class="relative">
-          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5"></i>
-          <input id="fileSearchInput" type="text" oninput="handleFileSearch(this.value)" placeholder="Filter files or exported symbols..." class="w-full bg-slate-900 border border-slate-700/80 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono" />
-          <button id="clearSearchBtn" type="button" onclick="clearFileSearch()" class="hidden absolute right-2 top-2 text-slate-400 hover:text-slate-200">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-
-        <div class="flex flex-wrap gap-1" id="layerFilterContainer">
-          <button type="button" onclick="setLayerFilter('all')" data-layer="all" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-600 text-white">All Layers</button>
-          <button type="button" onclick="setLayerFilter('core')" data-layer="core" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">DB &amp; Core</button>
-          <button type="button" onclick="setLayerFilter('parser')" data-layer="parser" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">Parser</button>
-          <button type="button" onclick="setLayerFilter('agent')" data-layer="agent" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">Agent/AI</button>
-          <button type="button" onclick="setLayerFilter('api')" data-layer="api" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">Routes/Auth</button>
-          <button type="button" onclick="setLayerFilter('ui')" data-layer="ui" class="layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">UI</button>
-        </div>
-
-        <div class="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-          <span>Sort modules by:</span>
-          <div class="inline-flex rounded bg-slate-900 p-0.5 border border-slate-800">
-            <button id="sortBtnBlast" type="button" onclick="setFileSortMode('blast')" class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-rose-300">Blast Radius</button>
-            <button id="sortBtnPath" type="button" onclick="setFileSortMode('path')" class="px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">Folder Tree</button>
-          </div>
-        </div>
+    <aside id="fileBrowser" class="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-slate-800/90 bg-slate-925/80 flex flex-col shrink-0 max-h-72 lg:max-h-none">
+      <div class="file-browser-controls">
+        <div class="file-browser-heading"><span id="activeLayerName">Files</span><button id="clearLayerFilter" hidden onclick="setLayerFilter('all')">Clear filter</button></div>
+        <input id="fileSearchInput" aria-label="Filter files or symbols" oninput="handleFileSearch(this.value)" placeholder="Filter files, symbols… (⌘P)">
+        <button id="clearSearchBtn" class="hidden" onclick="clearFileSearch()">Clear search</button>
+        <div id="layerFilterContainer" hidden></div>
+        <div class="file-sort"><button id="sortBtnBlast" onclick="setFileSortMode('blast')">Blast radius</button><button id="sortBtnPath" onclick="setFileSortMode('path')">Folder tree</button></div>
       </div>
-
       <div id="fileListContainer" class="flex-1 overflow-y-auto divide-y divide-slate-800/40 p-1.5 space-y-0.5"></div>
     </aside>
 
     <!-- CENTER PANEL: Interactive Dependency Graph Canvas -->
-    <section class="flex-1 flex flex-col relative bg-slate-950 min-h-[380px] lg:min-h-0 overflow-hidden">
+    <section id="mapRegion" class="flex-1 flex flex-col relative bg-slate-950 min-h-[380px] lg:min-h-0 overflow-hidden">
 
-      <div class="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-20">
-        <div class="glass-panel rounded-lg p-1.5 flex items-center gap-1.5 pointer-events-auto shadow-lg">
-          <button id="layoutBtnDag" type="button" onclick="setGraphLayout('dag')" class="px-2.5 py-1 rounded text-xs font-medium bg-indigo-600 text-white flex items-center gap-1 transition-all" title="Architectural Layered Layout">
-            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-            <span>Layered Map</span>
-          </button>
-          <button id="layoutBtnForce" type="button" onclick="setGraphLayout('force')" class="px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all" title="Force-Directed Cluster Layout">
-            <i data-lucide="orbit" class="w-3.5 h-3.5"></i>
-            <span>Force Graph</span>
-          </button>
-          <div class="h-4 w-px bg-slate-700/80 mx-0.5"></div>
-          <button id="btnToggleIsolate" type="button" onclick="toggleIsolateBlastRadius()" class="px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all" title="Dim unrelated files to isolate the selected file's blast radius">
-            <i data-lucide="focus" class="w-3.5 h-3.5 text-rose-400"></i>
-            <span>Focus Blast Radius</span>
-          </button>
-          <button id="btnSimulateBreak" type="button" onclick="toggleBreakSimulation()" class="px-2.5 py-1 rounded text-xs font-medium text-slate-300 hover:text-white flex items-center gap-1 transition-all" title="Simulate modifying an exported symbol in the selected file">
-            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
-            <span>Simulate Change</span>
-          </button>
-        </div>
-
-        <div class="glass-panel rounded-lg p-1 flex items-center gap-1 pointer-events-auto shadow-lg">
-          <button type="button" onclick="zoomGraph(1.2)" class="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white" title="Zoom In">
-            <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
-          </button>
-          <button type="button" onclick="zoomGraph(0.83)" class="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-white" title="Zoom Out">
-            <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
-          </button>
-          <button type="button" onclick="resetGraphView()" class="px-2 py-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white text-[11px] font-mono" title="Fit Graph to Screen">
-            Fit View
-          </button>
-        </div>
-      </div>
-
+      <div id="canvasToolbar"><button onclick="resetGraphView()">Fit</button><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button id="btnToggleIsolate" aria-pressed="false" onclick="toggleIsolateBlastRadius()">Isolate</button><button id="btnSimulateBreak" aria-pressed="false" onclick="toggleBreakSimulation()">Simulate</button><button id="toggleInspectorBtn" onclick="toggleInspector()">Hide inspector</button><button id="layoutBtnDag" hidden></button><button id="layoutBtnForce" hidden></button></div>
       <div id="canvasAlertBanner" class="hidden absolute top-16 left-3 right-3 z-20 pointer-events-none flex justify-center">
-        <div id="canvasAlertContent" class="glass-panel border-rose-500/50 bg-rose-950/80 text-rose-100 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2.5 shadow-xl pointer-events-auto">
+        <div id="canvasAlertContent" class="simulation-notice pointer-events-auto">
           <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 shrink-0"></i>
           <span id="canvasAlertText">Breaking change simulation active</span>
           <button type="button" onclick="clearCanvasBanner()" class="ml-2 text-rose-300 hover:text-white">
@@ -260,212 +169,73 @@
       </div>
 
       <div id="graphCanvasContainer" class="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing">
+        <p id="mapEmptyState" hidden style="position:absolute;inset:45% 16px auto;text-align:center;color:var(--muted);font-size:13px">Open a folder or drop a repository snapshot to explore its files.</p>
         <canvas id="dependencyCanvas" class="w-full h-full block"></canvas>
       </div>
 
-      <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-20">
-        <div class="glass-panel rounded-lg px-3 py-1.5 flex flex-wrap items-center gap-3 text-[11px] pointer-events-auto">
-          <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-full bg-indigo-500 ring-2 ring-indigo-300"></span>
-            <span class="text-slate-200 font-medium">Selected File</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-full bg-rose-500 ring-2 ring-rose-300/60"></span>
-            <span class="text-slate-200">1-Hop Dependent <span class="text-rose-400 font-mono">(Direct Break)</span></span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-full bg-amber-500 ring-2 ring-amber-300/60"></span>
-            <span class="text-slate-200">2-Hop Dependent <span class="text-amber-400 font-mono">(Cascading)</span></span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
-            <span class="text-slate-200">Imported by Selected</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
-            <span class="text-slate-200">Agent Walked</span>
-          </div>
-        </div>
-
-        <div class="glass-panel rounded-lg px-2.5 py-1 text-[11px] font-mono text-slate-400 pointer-events-auto hidden sm:block">
-          Drag nodes to rearrange • Scroll to zoom • Click file chip to jump
-        </div>
-      </div>
     </section>
 
     <!-- RIGHT PANEL: Module Inspector / Blast Radius & Graph-Walking Agent -->
-    <aside class="w-full lg:w-[430px] xl:w-[460px] border-t lg:border-t-0 lg:border-l border-slate-800/90 bg-slate-925/95 flex flex-col shrink-0 max-h-[540px] lg:max-h-none">
+    <aside id="inspectorRegion" class="w-full lg:w-[430px] xl:w-[460px] border-t lg:border-t-0 lg:border-l border-slate-800/90 bg-slate-925/95 flex flex-col shrink-0 max-h-[540px] lg:max-h-none">
 
       <div class="flex border-b border-slate-800 bg-slate-900/70 p-1 gap-1 shrink-0">
         <button id="rightTabInspector" type="button" onclick="switchRightPanelTab('inspector')" class="flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-slate-800 text-white shadow-sm border border-slate-700/70">
           <i data-lucide="radar" class="w-3.5 h-3.5 text-rose-400"></i>
-          <span>Impact &amp; Module Explainer</span>
+          <span>Impact</span>
         </button>
         <button id="rightTabAgent" type="button" onclick="switchRightPanelTab('agent')" class="flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-slate-400 hover:text-slate-200">
           <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span>Ask the Repository</span>
+          <span>Ask · Trace</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300">Agent</span>
         </button>
       </div>
 
       <!-- RIGHT TAB 1: MODULE INSPECTOR & BLAST RADIUS -->
-      <div id="panelInspectorContent" class="flex-1 overflow-y-auto p-4 space-y-4">
-
-        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3.5 space-y-2.5">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <span id="inspectorLayerBadge" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">CORE / DB</span>
-                <span id="inspectorLocBadge" class="text-[11px] font-mono text-slate-400">27 lines</span>
-              </div>
-              <h2 id="inspectorFilePath" class="font-mono text-sm font-bold text-white mt-1 break-all">src/lib/db/supabase.ts</h2>
-            </div>
-            <button type="button" onclick="askAgentAboutSelectedFile()" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium flex items-center gap-1 shrink-0 transition-all" title="Let the Graph Agent trace this module">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-              <span>Trace in Agent</span>
-            </button>
-          </div>
-
-          <div>
-            <div class="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1">Parsed AST Exports</div>
-            <div id="inspectorExportsList" class="flex flex-wrap gap-1"></div>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <i data-lucide="flame" class="w-3.5 h-3.5 text-rose-400"></i>
-              <span>What Breaks If You Change This File</span>
-            </h3>
-            <span id="inspectorImpactPercent" class="text-xs font-mono font-semibold text-rose-300">11 of 16 files (69%)</span>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <div class="rounded-lg bg-rose-950/35 border border-rose-500/35 p-2.5">
-              <div class="text-[10px] font-mono uppercase text-rose-300">1-Hop Direct</div>
-              <div id="inspectorHop1Count" class="text-xl font-bold font-mono text-rose-400 mt-0.5">5</div>
-              <div class="text-[10px] text-rose-200/70">Import this directly</div>
-            </div>
-            <div class="rounded-lg bg-amber-950/35 border border-amber-500/35 p-2.5">
-              <div class="text-[10px] font-mono uppercase text-amber-300">2-Hop Cascade</div>
-              <div id="inspectorHop2Count" class="text-xl font-bold font-mono text-amber-400 mt-0.5">6</div>
-              <div class="text-[10px] text-amber-200/70">Break 2 levels out</div>
-            </div>
-            <div class="rounded-lg bg-cyan-950/30 border border-cyan-500/30 p-2.5">
-              <div class="text-[10px] font-mono uppercase text-cyan-300">Outbound Deps</div>
-              <div id="inspectorOutboundCount" class="text-xl font-bold font-mono text-cyan-400 mt-0.5">1</div>
-              <div class="text-[10px] text-cyan-200/70">Files this imports</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/95 border border-indigo-500/30 p-3.5 space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <i data-lucide="book-open-check" class="w-3.5 h-3.5 text-indigo-400"></i>
-              <span class="text-xs font-semibold text-white">Grounded Module Explanation</span>
-            </div>
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">100% AST-Proved</span>
-          </div>
-          <div id="inspectorExplanationText" class="text-xs text-slate-300 leading-relaxed select-text"></div>
-        </div>
-
-        <div class="space-y-3">
-          <div class="rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
-            <div class="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <span class="text-xs font-semibold text-rose-300 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-                Direct Dependents (1-Hop Breakage)
-              </span>
-              <span id="hop1HeaderBadge" class="text-[11px] font-mono text-rose-400">5 files</span>
-            </div>
-            <div id="hop1ListContainer" class="divide-y divide-slate-800/60 max-h-44 overflow-y-auto"></div>
-          </div>
-
-          <div class="rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
-            <div class="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <span class="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                Transitive Blast Radius (2-Hops Out)
-              </span>
-              <span id="hop2HeaderBadge" class="text-[11px] font-mono text-amber-400">6 files</span>
-            </div>
-            <div id="hop2ListContainer" class="divide-y divide-slate-800/60 max-h-44 overflow-y-auto"></div>
-          </div>
-
-          <div class="rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
-            <div class="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <span class="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-                Outbound Imports (What This File Uses)
-              </span>
-              <span id="outboundHeaderBadge" class="text-[11px] font-mono text-cyan-400">1 file</span>
-            </div>
-            <div id="outboundListContainer" class="divide-y divide-slate-800/60 max-h-36 overflow-y-auto"></div>
-          </div>
-        </div>
-
-        <div class="rounded-lg border border-slate-800 bg-slate-950 overflow-hidden">
-          <div class="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-            <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <i data-lucide="code-2" class="w-3.5 h-3.5 text-indigo-400"></i>
-              <span>Source Code &amp; Parsed Import Lines</span>
-            </span>
-            <button type="button" onclick="copySelectedSource()" class="text-[11px] font-mono text-slate-400 hover:text-white flex items-center gap-1">
-              <i data-lucide="copy" class="w-3 h-3"></i>
-              <span>Copy</span>
-            </button>
-          </div>
-          <pre id="inspectorSourceCode" class="p-3 text-[11px] font-mono text-slate-300 overflow-x-auto max-h-64 leading-relaxed select-text"></pre>
-        </div>
-
+      <div id="panelInspectorContent" class="impact-content flex-1 overflow-y-auto">
+        <h1 id="inspectorFilePath"></h1>
+        <div class="impact-context" hidden><span id="inspectorLayerBadge"></span> · <span id="inspectorLocBadge"></span></div>
+        <div id="inspectorImpactPercent" class="impact-headline"></div><p id="inspectorImpactCaption"></p>
+        <div class="impact-kpis"><div><span id="inspectorHop1Count"></span><label>Direct breaks</label></div><div><span id="inspectorHop2Count"></span><label>2-hop cascade</label></div><div><span id="inspectorOutboundCount"></span><label>Outbound imports</label></div></div>
+        <div id="inspectorExplanationText"></div>
+        <details><summary>All exports</summary><div id="inspectorExportsList"></div></details>
+        <section><h2>Breaks at 1 hop <span id="hop1HeaderBadge"></span></h2><div id="hop1ListContainer"></div></section>
+        <section><h2>Cascades at 2 hops <span id="hop2HeaderBadge"></span></h2><div id="hop2ListContainer"></div></section>
+        <section><h2>Outbound imports <span id="outboundHeaderBadge"></span></h2><div id="outboundListContainer"></div></section>
+        <details><summary>Source</summary><button onclick="copySelectedSource()">Copy</button><pre id="inspectorSourceCode"></pre></details>
       </div>
 
       <!-- RIGHT TAB 2: ASK THE REPOSITORY (STEP-BY-STEP GRAPH-WALKING AGENT) -->
-      <div id="panelAgentContent" class="hidden flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div class="p-3 border-b border-slate-800 bg-slate-900/40 space-y-2 shrink-0">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Walk the Real Graph Step-by-Step</span>
-            <span class="text-[10px] font-mono text-emerald-400">5 AST Tools Active</span>
+      <div id="panelAgentContent" class="hidden">
+        <div >
+          <div >
+            <span >Walk the Real Graph Step-by-Step</span>
+            <span >5 AST Tools Active</span>
           </div>
-          <div class="flex flex-wrap gap-1.5" id="agentPresetButtons">
-            <button type="button" onclick="runAgentQuery('Where does auth get enforced across the repository?')" class="px-2 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 hover:border-indigo-500/40 border border-slate-700/80 text-[11px] text-slate-200 transition-all">
+          <div  id="agentPresetButtons">
+            <button type="button" onclick="runAgentQuery('Where does auth get enforced across the repository?')" >
               Where does auth get enforced?
             </button>
-            <button type="button" onclick="runAgentQuery('What breaks if I change the database client?')" class="px-2 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 hover:border-indigo-500/40 border border-slate-700/80 text-[11px] text-slate-200 transition-all">
+            <button type="button" onclick="runAgentQuery('What breaks if I change the database client?')" >
               What breaks if I change the DB?
             </button>
-            <button type="button" onclick="runAgentQuery('How does the AST parser connect to the UI canvas?')" class="px-2 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 hover:border-indigo-500/40 border border-slate-700/80 text-[11px] text-slate-200 transition-all">
+            <button type="button" onclick="runAgentQuery('How does the AST parser connect to the UI canvas?')" >
               How does parser connect to UI?
             </button>
-            <button type="button" onclick="runAgentQuery('Are there any circular dependencies or architecture bottlenecks?')" class="px-2 py-1 rounded-md bg-slate-800/90 hover:bg-indigo-600/30 hover:border-indigo-500/40 border border-slate-700/80 text-[11px] text-slate-200 transition-all">
+            <button type="button" onclick="runAgentQuery('Are there any circular dependencies or architecture bottlenecks?')" >
               Find bottlenecks &amp; cycles
             </button>
           </div>
         </div>
 
-        <div id="agentTraceScroll" class="flex-1 overflow-y-auto p-3.5 space-y-4 select-text">
-          <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3.5 space-y-2">
-            <div class="flex items-center gap-2">
-              <div class="w-6 h-6 rounded-md bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                <i data-lucide="cpu" class="w-3.5 h-3.5 text-emerald-400"></i>
-              </div>
-              <span class="text-xs font-semibold text-white">Cartograph Graph-Walking Agent</span>
-            </div>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              Unlike a single-shot LLM prompt that guesses how your repository works, this agent executes a multi-step tool loop (<span class="font-mono text-emerald-300">search_symbols</span>, <span class="font-mono text-emerald-300">get_file_ast</span>, <span class="font-mono text-emerald-300">walk_dependents</span>, <span class="font-mono text-emerald-300">trace_dependency_path</span>) over the parsed AST graph and highlights every visited node on the canvas.
-            </p>
-          </div>
-
-          <div id="agentConversationStream" class="space-y-4"></div>
+        <div class="ask-scroll" id="agentTraceScroll" >
+          <div id="agentConversationStream" ></div>
         </div>
 
-        <form onsubmit="handleAgentFormSubmit(event)" class="p-3 border-t border-slate-800 bg-slate-900/90 flex items-center gap-2 shrink-0">
-          <input id="agentQuestionInput" type="text" placeholder="Ask about any module, route, symbol, or blast radius..." class="flex-1 bg-slate-950 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
-          <button type="submit" class="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 shadow-sm">
-            <i data-lucide="play" class="w-3.5 h-3.5"></i>
-            <span>Walk Graph</span>
+        <form onsubmit="handleAgentFormSubmit(event)" >
+          <input id="agentQuestionInput" type="text" placeholder="Ask about any module, route, symbol, or blast radius..."  />
+          <button type="submit" >
+            <i data-lucide="play" ></i>
+            <span>Ask</span>
           </button>
         </form>
       </div>
@@ -476,259 +246,35 @@
   <!-- ===================================================================== -->
   <!-- VIEW 2: AGENT EVALUATIONS ("CATCH THE AI WITH A NUMBER")              -->
   <!-- ===================================================================== -->
-  <section id="viewEvals" class="hidden flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950">
-    <div class="max-w-6xl mx-auto space-y-6">
-
-      <div class="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div class="space-y-1.5 max-w-3xl">
-          <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono">
-            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
-            <span>LangSmith-Style Groundedness Evaluation Suite</span>
-          </div>
-          <h1 class="text-lg lg:text-xl font-bold text-white">Catching Confidently Wrong AI Outputs With a Number</h1>
-          <p class="text-xs lg:text-sm text-slate-300 leading-relaxed">
-            In the tutorial, an unconstrained LLM prompt produces a well-written, specific answer that silently invents file paths and misses 2-hop dependents. This benchmark suite records every agent run, compares the <strong class="text-white">AST-Constrained Graph Agent</strong> against a <strong class="text-rose-300">Naive Unconstrained Prompt</strong>, and scores citation fidelity against the ground-truth parser graph.
-          </p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-          <div class="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-            <button id="evalModeStrictBtn" type="button" onclick="setEvalPromptMode('strict')" class="px-3 py-1.5 rounded-md font-medium bg-emerald-600 text-white">AST-Locked Agent</button>
-            <button id="evalModeNaiveBtn" type="button" onclick="setEvalPromptMode('naive')" class="px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white">Naive LLM Prompt (Drifted)</button>
-          </div>
-          <button type="button" onclick="runEvaluationSuite()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-md shadow-indigo-600/20">
-            <i data-lucide="play-circle" class="w-4 h-4"></i>
-            <span>Run Full Benchmark Suite</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
-          <div class="text-xs text-slate-400 flex items-center justify-between">
-            <span>Citation Groundedness</span>
-            <i data-lucide="file-check-2" class="w-4 h-4 text-emerald-400"></i>
-          </div>
-          <div id="evalScoreGroundedness" class="text-2xl font-bold font-mono text-emerald-400 mt-1">100.0%</div>
-          <p id="evalSubGroundedness" class="text-[11px] text-slate-400 mt-1">Every cited file exists in parsed AST</p>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
-          <div class="text-xs text-slate-400 flex items-center justify-between">
-            <span>2-Hop Blast Radius Recall</span>
-            <i data-lucide="git-pull-request" class="w-4 h-4 text-indigo-400"></i>
-          </div>
-          <div id="evalScoreRecall" class="text-2xl font-bold font-mono text-indigo-400 mt-1">100.0%</div>
-          <p id="evalSubRecall" class="text-[11px] text-slate-400 mt-1">All 1-hop &amp; 2-hop dependents found</p>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
-          <div class="text-xs text-slate-400 flex items-center justify-between">
-            <span>Hallucinated Edges / Paths</span>
-            <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
-          </div>
-          <div id="evalScoreHallucinations" class="text-2xl font-bold font-mono text-emerald-400 mt-1">0</div>
-          <p id="evalSubHallucinations" class="text-[11px] text-slate-400 mt-1">Zero unverified files or fake imports</p>
-        </div>
-
-        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
-          <div class="text-xs text-slate-400 flex items-center justify-between">
-            <span>Avg Tool Steps / Latency</span>
-            <i data-lucide="timer" class="w-4 h-4 text-cyan-400"></i>
-          </div>
-          <div id="evalScoreLatency" class="text-2xl font-bold font-mono text-cyan-300 mt-1">3.0 steps</div>
-          <p id="evalSubLatency" class="text-[11px] text-slate-400 mt-1">Deterministic local AST execution</p>
-        </div>
-      </div>
-
-      <div class="rounded-xl bg-slate-900/90 border border-slate-800 overflow-hidden">
-        <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <div>
-            <h2 class="text-sm font-semibold text-white">Golden Repository Q&amp;A Benchmark Cases</h2>
-            <p class="text-xs text-slate-400">Each test case compares the agent's cited files and edges against the ground-truth parser graph for the active repository.</p>
-          </div>
-          <span id="evalActiveModeTag" class="px-2.5 py-1 rounded text-xs font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Mode: AST-Constrained Graph Agent</span>
-        </div>
-
-        <div id="evalCasesContainer" class="divide-y divide-slate-800"></div>
-      </div>
-    </div>
+  <section id="viewEvals" class="hidden quiet-pane">
+    <header class="pane-title"><div><h1>Evals</h1><p>Measure citation groundedness and blast-radius recall against the parsed graph.</p></div><button class="primary" onclick="runEvaluationSuite()">Run benchmark suite</button></header>
+    <div class="eval-controls"><button id="evalModeStrictBtn" onclick="setEvalPromptMode('strict')">Strict</button><button id="evalModeNaiveBtn" onclick="setEvalPromptMode('naive')">Naive</button><span id="evalActiveModeTag">Not run</span></div>
+    <div class="eval-scores"><div><p>Citation groundedness</p><div id="evalScoreGroundedness">—</div></div><div><p>Blast-radius recall</p><div id="evalScoreRecall">—</div></div><div><p>Hallucinated paths</p><div id="evalScoreHallucinations">—</div></div><div><p>Average tool steps</p><div id="evalScoreLatency">—</div></div></div>
+    <div id="evalCasesContainer"></div>
+  </section>
+  <section id="viewSpecs" class="hidden quiet-pane">
+    <header class="pane-title"><div><h1>Docs</h1><p>Edit repository context and engineering rules generated from the current graph.</p></div><div class="pane-actions"><button onclick="regenerateSpecDocs()">Sync with current graph</button><button class="primary" onclick="downloadActiveSpecDoc()">Download</button></div></header>
+    <div class="docs-layout"><nav aria-label="Documents"><button id="specBtnPROJECT" onclick="selectSpecDoc('PROJECT.md')">PROJECT.md<small>Repository context</small></button><button id="specBtnCLAUDE" onclick="selectSpecDoc('CLAUDE.md')">CLAUDE.md<small>Engineering rules</small></button><button id="specBtnCLI" onclick="selectSpecDoc('cartograph-scan.mjs')">cartograph-scan.mjs<small>Local scanner</small></button></nav><div class="doc-editor"><header><span id="activeSpecFilename">PROJECT.md</span><button onclick="copyActiveSpecDoc()">Copy</button></header><textarea id="specDocTextarea" aria-label="Specification Document Content" oninput="state.specDocs[state.activeSpecDoc]=this.value" spellcheck="false"></textarea></div></div>
   </section>
 
-  <!-- ===================================================================== -->
-  <!-- VIEW 3: AGENTIC ENGINEERING SPECS (PROJECT.md & CLAUDE.md GENERATOR)  -->
-  <!-- ===================================================================== -->
-  <section id="viewSpecs" class="hidden flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950">
-    <div class="max-w-6xl mx-auto space-y-5">
-
-      <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div class="space-y-1">
-          <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono">
-            <span>Spec-Driven Agentic Engineering Workflow</span>
-          </div>
-          <h1 class="text-lg font-bold text-white">Live Repository Context &amp; Agent Governance Files</h1>
-          <p class="text-xs text-slate-300 max-w-3xl leading-relaxed">
-            Before letting a coding agent touch your repository, generate and drop <span class="font-mono text-indigo-300">PROJECT.md</span> (what the codebase is, its architectural layers, and high-blast-radius hotspots) and <span class="font-mono text-indigo-300">CLAUDE.md</span> (strict rules and things not to do) into your project root.
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" onclick="regenerateSpecDocs()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 border border-slate-700">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-            <span>Sync With Current Graph</span>
-          </button>
-          <button type="button" onclick="downloadActiveSpecDoc()" class="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Download File</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div class="space-y-2">
-          <button type="button" onclick="selectSpecDoc('PROJECT.md')" id="specBtnPROJECT" class="w-full text-left p-3 rounded-xl border border-indigo-500/50 bg-indigo-950/30 transition-all">
-            <div class="font-mono text-xs font-bold text-white flex items-center justify-between">
-              <span>PROJECT.md</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">Context</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1">Architecture map, verified module layers, 2-hop hotspots, and explicit non-goals.</p>
-          </button>
-
-          <button type="button" onclick="selectSpecDoc('CLAUDE.md')" id="specBtnCLAUDE" class="w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-900 transition-all">
-            <div class="font-mono text-xs font-bold text-white flex items-center justify-between">
-              <span>CLAUDE.md</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Rules</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1">Agent invariants, A/B decision rule, blast-radius check protocol, and forbidden actions.</p>
-          </button>
-
-          <button type="button" onclick="selectSpecDoc('cartograph-scan.mjs')" id="specBtnCLI" class="w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-900 transition-all">
-            <div class="font-mono text-xs font-bold text-white flex items-center justify-between">
-              <span>cli/cartograph-scan.mjs</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">Node CLI</span>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-1">Zero-dependency local Node.js scanner script to index any folder from your terminal.</p>
-          </button>
-        </div>
-
-        <div class="lg:col-span-3 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden flex flex-col">
-          <div class="px-4 py-2.5 bg-slate-925 border-b border-slate-800 flex items-center justify-between">
-            <span id="activeSpecFilename" class="font-mono text-xs font-semibold text-indigo-300">PROJECT.md</span>
-            <button type="button" onclick="copyActiveSpecDoc()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono flex items-center gap-1.5">
-              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-              <span>Copy to Clipboard</span>
-            </button>
-          </div>
-          <textarea id="specDocTextarea" aria-label="Specification Document Content" class="w-full h-[520px] bg-slate-950 p-4 font-mono text-xs text-slate-200 leading-relaxed focus:outline-none resize-none select-text" spellcheck="false"></textarea>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
+  <span id="intakeStatus" class="sr-only" aria-live="polite"></span>
+<details id="intakeReport" hidden><summary id="intakeSummary">Last intake</summary><div class="intake-body"><p id="intakeReasons"></p><ul id="intakeSkippedList"></ul><p id="intakeOmitted"></p></div></details>
+<footer id="shellStatus"><span><span id="metricTotalFiles">0</span> files · <span id="metricTotalEdges">0</span> edges · <button id="metricCycleBadge" onclick="handleCycleBadgeClick()">0 cycles</button><span class="status-hotspot"> · hotspot <button id="metricTopHotspotBtn" onclick="selectTopHotspot()">—</button></span></span><span class="status-zoom"><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><span id="shellZoom">100%</span><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button onclick="resetGraphView()">Fit</button></span></footer>
+<section id="commandPalette" hidden><div class="palette-modes" aria-label="Search mode"><button data-palette-mode="commands" onclick="setPaletteMode('commands')">Commands</button><button data-palette-mode="files" onclick="setPaletteMode('files')">Files</button></div><input id="paletteInput" role="combobox" aria-autocomplete="list" aria-controls="paletteResults" aria-expanded="true" autocomplete="off" placeholder="Search commands and files…" oninput="state.ui.paletteQuery=this.value;state.ui.paletteActiveIndex=-1;renderCommandPalette()" onkeydown="handlePaletteKeydown(event)"><div id="paletteResults" role="listbox" aria-label="Search results"></div><p id="paletteCount" role="status" aria-live="polite"></p></section>
+<dialog id="shellOverlay" aria-labelledby="shellOverlayTitle"><div class="sheet-heading"><h2 id="shellOverlayTitle">Navigation</h2><button aria-label="Close" onclick="closeUiOverlay()">Close</button></div><div id="shellOverlayBody"></div></dialog>
+<div id="navigationContent" hidden><div id="navigationRepositorySlot"></div><button data-view="explorer" onclick="switchMainView('explorer')">Dependency Map</button><button data-view="evals" onclick="switchMainView('evals')">Agent Evals</button><button data-view="specs" onclick="switchMainView('specs')">Docs &amp; Rules</button><button onclick="triggerFolderUpload()">Open Folder</button><button onclick="openAddFileModal()">+ Add file</button><button onclick="exportGraphSnapshot()">Export JSON</button><button onclick="openSettingsModal()">Settings</button></div>
   <!-- ===================================================================== -->
   <!-- MODAL 1: ADD / PASTE CUSTOM SOURCE FILE                               -->
   <!-- ===================================================================== -->
-  <div id="modalAddFile" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-xl rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden">
-      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <i data-lucide="file-plus-2" class="w-4 h-4 text-indigo-400"></i>
-          <h3 class="text-sm font-bold text-white">Add or Paste Source File into Graph</h3>
-        </div>
-        <button type="button" onclick="closeAddFileModal()" class="text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-      <div class="p-5 space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">Relative File Path (e.g., <span class="font-mono text-indigo-300">src/services/billing.ts</span>)</label>
-          <input id="customFilePathInput" type="text" value="src/services/billing-webhook.ts" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500" />
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">Source Code (Imports &amp; Exports will be parsed immediately)</label>
-          <textarea id="customFileCodeInput" rows="9" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">import { dbClient, recordAuditEvent } from '@/lib/db/supabase';
-import { requireAuth } from '@/middleware/auth-guard';
-
-export async function handleStripeWebhook(payload: unknown) {
-  const session = await requireAuth();
-  await recordAuditEvent('billing.webhook', session.orgId);
-  return dbClient.from('subscriptions').upsert(payload);
-}</textarea>
-        </div>
-        <div class="flex items-center justify-between pt-1">
-          <button type="button" onclick="triggerMultipleFilesUpload()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
-            <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-            <span>Or select multiple files from disk...</span>
-          </button>
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="closeAddFileModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs">Cancel</button>
-            <button type="button" onclick="submitCustomFile()" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">Parse &amp; Add to Graph</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================================================================== -->
-  <!-- MODAL 2: LOCAL AGENT & OLLAMA / API SETTINGS                          -->
-  <!-- ===================================================================== -->
-  <div id="modalSettings" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden">
-      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <i data-lucide="cpu" class="w-4 h-4 text-emerald-400"></i>
-          <h3 class="text-sm font-bold text-white">Local Agent Execution &amp; Ollama Settings</h3>
-        </div>
-        <button type="button" onclick="closeSettingsModal()" class="text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-      <div class="p-5 space-y-4 text-xs">
-        <p class="text-slate-300 leading-relaxed">
-          Cartograph's AST parser and graph-walking tool loop run <strong class="text-white">100% locally in your browser</strong>. You can use the built-in deterministic synthesizer (zero external calls) or connect a local <strong class="text-emerald-300">Ollama</strong> server to write natural-language syntheses strictly from the parser's tool output.
-        </p>
-
-        <div class="space-y-2">
-          <label class="block font-medium text-slate-200">Agent Synthesizer Engine</label>
-          <select id="settingsEngineSelect" onchange="handleEngineSelectChange(this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
-            <option value="deterministic">Built-in Deterministic AST Graph Walker (Offline / Default)</option>
-            <option value="ollama">Local Ollama Server (http://localhost:11434)</option>
-            <option value="openai">OpenAI-Compatible Endpoint (Local LM Studio / vLLM / API)</option>
-          </select>
-        </div>
-
-        <div id="ollamaConfigSection" class="space-y-3 pt-1">
-          <div>
-            <label class="block text-slate-300 mb-1">Endpoint URL</label>
-            <input id="settingsEndpointInput" type="text" value="http://localhost:11434/api/chat" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white" />
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-slate-300 mb-1">Model Name</label>
-              <input id="settingsModelInput" type="text" value="qwen2.5-coder:7b" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white" />
-            </div>
-            <div>
-              <label class="block text-slate-300 mb-1">API Key (Optional)</label>
-              <input id="settingsApiKeyInput" type="password" placeholder="Not needed for Ollama" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-          <button type="button" onclick="closeSettingsModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300">Cancel</button>
-          <button type="button" onclick="saveAgentSettings()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold">Save Settings</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <dialog id="modalAddFile" aria-labelledby="addFileTitle" class="form-dialog"><form onsubmit="event.preventDefault();submitCustomFile()"><header><h2 id="addFileTitle">Add file</h2><button type="button" onclick="closeAddFileModal()" aria-label="Close add file">Close</button></header><p>Paste source code or select files to parse their imports and exports.</p><label for="customFilePathInput">Relative file path</label><input id="customFilePathInput" required value="src/services/billing-webhook.ts"><label for="customFileCodeInput">Source code</label><textarea id="customFileCodeInput" rows="9" spellcheck="false">export function example() {}</textarea><footer><button type="button" onclick="triggerMultipleFilesUpload()">Select multiple files</button><span></span><button type="button" onclick="closeAddFileModal()">Cancel</button><button class="primary" type="submit">Parse and add</button></footer></form></dialog>
+  <dialog id="modalSettings" aria-labelledby="settingsTitle" class="form-dialog"><form onsubmit="event.preventDefault();saveAgentSettings()"><header><h2 id="settingsTitle">Agent settings</h2><button type="button" onclick="closeSettingsModal()" aria-label="Close settings">Close</button></header><p>The parser and tool trace run locally; optional models synthesize only verified evidence.</p><div class="settings-fields"><label for="settingsEngineSelect">Engine</label><select id="settingsEngineSelect" onchange="handleEngineSelectChange(this.value)"><option value="deterministic">Deterministic graph walker</option><option value="ollama">Local Ollama</option><option value="openai">OpenAI-compatible endpoint</option></select><label for="settingsEndpointInput">Endpoint URL</label><input id="settingsEndpointInput" type="url"><label for="settingsModelInput">Model</label><input id="settingsModelInput"><label for="settingsApiKeyInput">API key (optional)</label><input id="settingsApiKeyInput" type="password" autocomplete="off"></div><footer><span></span><button type="button" onclick="closeSettingsModal()">Cancel</button><button class="primary" type="submit">Save</button></footer></form></dialog>
 
   <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
   <script src="app/cartograph-preset-repos.js"></script>
   <script src="app/cartograph-graph-state.js"></script>
   <script src="app/cartograph-canvas-render.js"></script>
-  <script src="app/cartograph-ui-panels.js"></script>
+  <script src="app/cartograph-ui-panels.js" onload="initFilePathDelegation()"></script>
   <script src="app/cartograph-agent-evals.js"></script>
   <script src="app/cartograph-app-shell.js"></script>
 </body>

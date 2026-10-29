@@ -12,7 +12,7 @@ Prerequisites: a modern browser, and Node.js 18+ for the CLI and tests (verified
 on Node 26). Run all commands from the repository root.
 
 ```bash
-node --test                    # expect: 53 tests passing
+node --test                    # expect: 101 tests passing
 node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json
 open cartograph.html           # macOS; or double-click the file
 ```
@@ -21,13 +21,13 @@ open cartograph.html           # macOS; or double-click the file
 
 1. **Open the app directly**
    Double-click `cartograph.html`, or open it from the repository root. It loads
-   the shared parser/agent/evals/fit modules from `lib/` and the UI code from
+   the shared intake/parser/agent/evals/fit modules from `lib/` and the UI code from
    `app/`, so keep the repository layout intact. `cartograph.html` holds the
    markup and load order; `app/*.js` are the classic scripts it runs, in order:
    `preset-repos`, `graph-state`, `canvas-render`, `ui-panels`,
    `agent-evals`, `app-shell`.
 2. **Load a repository**
-   - Click **"Open Local Folder"** in the top bar and choose a project directory
+   - Click **Open folder** in the top bar or choose **Open folder** from Commands and choose a project directory
      (the browser's local directory reader; no files leave your machine).
    - Drag a `cartograph-snapshot.json` file onto the window (directory drag/drop
      is not supported).
@@ -42,9 +42,18 @@ open cartograph.html           # macOS; or double-click the file
    ```
    The CLI prints a terminal blast-radius report. With `--serve`, open
    <http://localhost:4173> and the scanned graph loads automatically.
-   Browser and CLI scan scopes differ slightly: the browser accepts
-   `.ts/.tsx/.js/.jsx/.mjs/.py/.go/.json` up to 350 KB, while the CLI also accepts
-   `.cjs/.css`, ignores more build directories, and allows up to 500 KB.
+   Browser and CLI use the same intake policy for supplied repository files:
+   `.ts/.tsx/.js/.jsx/.mjs/.cjs/.py/.go/.css/.json` (case-insensitive), up to
+   **500,000 bytes** inclusive. Hidden entries and dependency/build directories
+   (`node_modules`, `dist`, `build`, `out`, `coverage`, `__pycache__`, `venv`,
+   `vendor`, `target`) are skipped by whole path segment. The selected root itself
+   is kept; CLI symlinks are not followed. Browser availability depends on the
+   files supplied by the file picker.
+   **Last intake** keeps skipped reason counts and up to 100 safe-text details
+   accessible in the browser; the CLI prints the same kind of report. A pruned
+   directory counts as one skipped entry. All-skipped browser selections keep
+   the current map. Both graph and files snapshots retain their recorded files
+   without intake filtering; snapshot/export formats stay unchanged.
 4. **Connect a local LLM (optional)**
    The built-in deterministic graph walker needs no model. For natural-language
    synthesis with [Ollama](https://ollama.com):
@@ -52,12 +61,21 @@ open cartograph.html           # macOS; or double-click the file
    ollama pull qwen2.5-coder:7b
    OLLAMA_ORIGINS='*' ollama serve   # allow requests from the browser page
    ```
-   Open the sliders button in the top bar (**"AST Walker (Local)"**), choose the
-   **"Local Agent Execution & Ollama Settings"** modal, and set the endpoint to
+   Open **Settings** from the rail, Menu, or Commands, and set the endpoint to
    `http://localhost:11434/api/chat`. Whatever the model writes is validated
    before it may replace the deterministic answer: any path-like token that is
    outside the parsed graph or the visible tool trace keeps the deterministic
    synthesis and shows a rejection toast naming the ungrounded paths.
+
+## Working in the app
+
+Use **Map**, **Evals**, and **Docs** in the persistent rail, or **Menu** on narrower screens. Above 1100px, Map shows Files, canvas and Impact/Ask together. At 641–1100px, Files and Impact open in one dismissible sheet. At 640px and below, **Files | Map | Impact | Ask** switches the visible region; choosing a file opens Impact. The repository, selected file, file-list scroll and document edits survive ordinary view changes.
+
+**Commands** opens the action palette. Press **⌘/Ctrl+K** for commands or **⌘/Ctrl+P** for file search. Switch Commands/Files inside the palette, type to filter, use ↑/↓ and Enter to choose, or Escape to close. File search includes the whole current graph regardless of sidebar filters. Unavailable actions explain their requirements. Escape closes sheets and dialogs and returns focus to their launcher.
+
+On Map, choose Blast radius or Folder tree, filter files by path/export, drag cards, pan the canvas, scroll to zoom and use **Fit** to frame the current positions. Arrows point from the importing file to its dependency. Impact shows direct and transitive dependents, outbound imports and source evidence; expand Source to copy it. File paths in explanations and Ask answers jump to the corresponding file.
+
+Evals starts **Not run**. Only **Run benchmark suite** executes it; changing repository or strict/naive mode clears stored results. Expand each case for the answer, citations, diagnostics and tool trace. Docs keeps edits while switching documents; **Sync with current graph** explicitly regenerates content, and Copy/Download use the active document. A repository replacement clears previous conversation and evaluation results. Freshness distinguishes built-in samples, local parse time and snapshot timestamps.
 
 ## Glossary
 
@@ -70,7 +88,7 @@ open cartograph.html           # macOS; or double-click the file
   that re-exports a directory's modules; imports resolve through it.
 - **Grounded** — every cited file path exists in the parsed graph (and, for the
   eval suite, should have appeared in a tool trace).
-- **Chip / badge** — two names for the same thing: a clickable file pill in
+- **Chip / badge** — two names for the same thing: an underlined clickable file path in
   agent answers and explanations (marked with a `data-filepath="..."`
   attribute); clicking it selects that file on the canvas.
 - **Rejection toast** — the on-screen warning when the LLM's synthesis is
@@ -87,7 +105,7 @@ open cartograph.html           # macOS; or double-click the file
 - **Fit camera** — the framing computed by
   `CartographFit.computeFitCamera(...)`: one uniform zoom (clamped to
   `[0.05, 2.6]`) plus a pan that places the whole graph's world box inside the
-  visible canvas, with padding so nodes clear the top bar and legend.
+  visible canvas, with padding so cards clear the canvas toolbar. Fit changes the camera without rearranging dragged cards.
 
 ## Architecture
 
@@ -107,7 +125,8 @@ open cartograph.html           # macOS; or double-click the file
 ## Project Structure
 
 - [`cartograph.html`](cartograph.html) — single-page Codebase Intelligence app:
-  markup plus the explicit load order (four `lib/` modules, six `app/` scripts).
+  markup plus the explicit load order (five `lib/` modules, six `app/` scripts).
+- [`lib/cartograph-intake.js`](lib/cartograph-intake.js) — shared file-selection policy for browser and CLI scans.
 - [`lib/cartograph-parser.js`](lib/cartograph-parser.js) — shared standalone
   deterministic parser (browser + Node).
 - [`lib/cartograph-agent.js`](lib/cartograph-agent.js) — deterministic agent
@@ -118,9 +137,8 @@ open cartograph.html           # macOS; or double-click the file
   frames the whole graph inside the visible canvas (browser + Node).
 - [`app/`](app/README.md) — the six browser-only UI scripts
   (`cartograph-preset-repos`, `-graph-state`, `-canvas-render`, `-ui-panels`,
-  `-agent-evals`, `-app-shell`), split verbatim from the former single inline
-  script; see [`app/README.md`](app/README.md) for the file map and the
-  load-order invariant.
+  `-agent-evals`, `-app-shell`); see [`app/README.md`](app/README.md) for
+  the file map and load-order invariant.
 - [`cli/cartograph-scan.mjs`](cli/cartograph-scan.mjs) — zero-dependency Node.js
   CLI scanner, report, and local server.
 - [`test/parser.test.js`](test/parser.test.js) — `node:test` suite for parser
@@ -137,10 +155,9 @@ open cartograph.html           # macOS; or double-click the file
 
 ## Browser App Map
 
-`cartograph.html` is the markup plus an explicit load order — four `lib/`
+`cartograph.html` is the markup plus an explicit load order — five `lib/`
 modules in `<head>`, then six classic scripts from `app/` at the end of
-`<body>` (a verbatim, order-preserving split of the former single inline
-script). The landmarks, in load order:
+`<body>`. The landmarks, in load order:
 
 | File | Landmarks |
 | --- | --- |
@@ -148,7 +165,7 @@ script). The landmarks, in load order:
 | `app/cartograph-graph-state.js` | The `state` object (graph, selection, agent config); parse pipeline `parseRepositoryIntoGraph` → `applyParsedGraph`; layout `computeGraphNodePositions` (+ `CartographFit` camera fit), `getNodeVisualRole` |
 | `app/cartograph-canvas-render.js` | `drawDependencyGraph`, canvas animation loop, mouse/wheel interactions, `zoomGraph`, `resetGraphView`, `setGraphLayout`, blast-radius isolate, break simulation |
 | `app/cartograph-ui-panels.js` | `selectFileNode`, `renderInspectorPanel`, `buildGroundedModuleExplanationHtml`, file chips (`makeFileChipHtml`), header metrics |
-| `app/cartograph-agent-evals.js` | `buildDeterministicAgentPlan` and `runAgentQuery` (routing through the `lib/cartograph-agent.js` `TOOLS` registry); evaluation suite `runEvaluationSuite`, `evaluateEvalSuite`, `renderEvalSuite` (scoring in `lib/cartograph-evals.js`) |
+| `app/cartograph-agent-evals.js` | `buildDeterministicAgentPlan` and `runAgentQuery` (routing through the `lib/cartograph-agent.js` `TOOLS` registry); evaluation suite `runEvaluationSuite` and `renderEvalSuite` (execution and scoring in `lib/cartograph-evals.js`) |
 | `app/cartograph-app-shell.js` | Loading: `ingestUploadedFileObjects`, `handlePresetChange`, `markPresetSelectCustom`; `openSettingsModal`; spec-docs viewer, modals, snapshot export, toasts; `DOMContentLoaded` bootstrap |
 
 Phase 02 and phase 03 specs describe the intended behavior of these areas, and
@@ -174,6 +191,4 @@ node --test
 
 The suite runs against `parseRepository(files)` — the same public seam the CLI
 and browser app use. `npm test` runs the same command; `npm run scan -- <dir>`
-runs the CLI. `node --test` never executes the browser-only `app/*.js`
-scripts; two contract tests read them as plain text to keep tool-name spelling
-consistent across surfaces.
+runs the CLI. The measured suite has **101 passing tests** covering shared modules, intake, CLI, UI helpers, navigation, repository replacement and Evals. `test/ui.test.js` loads the actual shared modules and all six app scripts in a Node VM, with bootstrap suppressed and minimal DOM stubs, to test geometry, edge roles, deterministic card separation and palette ranking/availability. Cross-surface contracts also read scripts to keep tool names consistent. This does not simulate real layout, focus, pointer input, dialogs, clipboard/downloads or asynchronous browser lifecycle behavior; those require real-browser checks. Locally captured acceptance evidence and installed design-probe metrics are in `.taste-skill/after/` when available.

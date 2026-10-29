@@ -87,6 +87,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       const textarea = document.getElementById('specDocTextarea');
       if (textarea) {
         textarea.value = state.specDocs[state.activeSpecDoc] || '';
+        selectSpecDoc(state.activeSpecDoc);
       }
     }
 
@@ -103,9 +104,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       Object.entries(map).forEach(([k, id]) => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.className = k === docName
-          ? 'w-full text-left p-3 rounded-xl border border-indigo-500/50 bg-indigo-950/30 transition-all'
-          : 'w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-900/70 hover:bg-slate-900 transition-all';
+        el.setAttribute('aria-current', String(k === docName));
       });
     }
 
@@ -129,6 +128,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function triggerFolderUpload() {
+      closeUiOverlay(false);
       document.getElementById('localFolderInput').click();
     }
 
@@ -149,56 +149,87 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       closeAddFileModal();
     }
 
+    function renderIntakeReport(included, skipped, snapshot = false) {
+      const counts = {};
+      for (const entry of skipped) counts[entry.reason] = (counts[entry.reason] || 0) + 1;
+      const reasons = Object.entries(counts).map(([reason, count]) => `${reason}: ${count}`).join(', ');
+      state.lastIntakeReport = { included, skipped, counts, snapshot };
+      document.getElementById('intakeStatus').textContent = snapshot
+        ? `Snapshot loaded: ${included} recorded files. Repository exclusions were not applied.`
+        : `${included} files included; ${skipped.length} skipped entries${reasons ? ` (${reasons})` : ''}. Excluded directories count as one entry; their contents were not scanned.`;
+      document.getElementById('intakeReasons').textContent = document.getElementById('intakeStatus').textContent;
+      document.getElementById('intakeSummary').textContent = snapshot
+        ? `Last intake: ${included} snapshot files`
+        : `Last intake: ${included} files · ${skipped.length} skipped`;
+      const list = document.getElementById('intakeSkippedList');
+      list.replaceChildren();
+      for (const entry of skipped.slice(0, 100)) {
+        const item = document.createElement('li');
+        item.textContent = `${entry.path} — ${entry.reason}`;
+        list.appendChild(item);
+      }
+      document.getElementById('intakeOmitted').textContent = skipped.length > 100
+        ? `${skipped.length - 100} more skipped entries not displayed.` : '';
+      document.getElementById('intakeReport').hidden = false;
+    }
+
     async function ingestUploadedFileObjects(fileList) {
-      const ignoredSegments = ['node_modules/', '.git/', '.next/', 'dist/', 'build/', '__pycache__/', '.venv/'];
-      const validExts = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go', '.json'];
-
-      if (fileList.length === 1 && fileList[0].name.endsWith('.json')) {
-        try {
-          const text = await fileList[0].text();
-          const parsed = JSON.parse(text);
-          if (parsed && parsed.graph && Array.isArray(parsed.graph.nodes)) {
-            applyParsedGraph(parsed.graph);
-            showToast(`Loaded ${parsed.graph.nodes.length} parsed nodes from ${fileList[0].name}`);
-            return;
-          }
-          if (parsed && Array.isArray(parsed.files)) {
-            parseRepositoryIntoGraph(parsed.files, parsed.name || 'imported-snapshot', 'Imported from Cartograph JSON snapshot');
-            showToast(`Loaded ${parsed.files.length} files from ${fileList[0].name}`);
-            return;
-          }
-        } catch (err) {}
+      if (!fileList.length) return;
+      // Detect both established snapshot forms before applying repository policy.
+      // A single JSON may also be ordinary repository data.
+      let singleText;
+      if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.json')) {
+        try { singleText = await fileList[0].text(); } catch (error) { /* Report via ordinary intake below. */ }
+        let parsed;
+        try { parsed = JSON.parse(singleText); } catch (error) { /* Ordinary JSON/source input. */ }
+        if (parsed && parsed.graph && Array.isArray(parsed.graph.nodes)) {
+          applyParsedGraph(parsed.graph, { kind: 'snapshot', scannedAt: parsed.scannedAt }, { customLabel: `snapshot: ${parsed.name || parsed.graph.name || fileList[0].name}` });
+          renderIntakeReport(parsed.graph.nodes.length, [], true);
+          showToast(`Loaded ${parsed.graph.nodes.length} parsed nodes from ${fileList[0].name}`);
+          return;
+        }
+        if (parsed && Array.isArray(parsed.files)) {
+          parseRepositoryIntoGraph(parsed.files, parsed.name || 'imported-snapshot', 'Imported from Cartograph JSON snapshot', { kind: 'snapshot', scannedAt: parsed.scannedAt }, { customLabel: `snapshot: ${parsed.name || fileList[0].name}` });
+          renderIntakeReport(parsed.files.length, [], true);
+          showToast(`Loaded ${parsed.files.length} files from ${fileList[0].name}`);
+          return;
+        }
       }
 
-      const collected = [];
-      let rootFolder = 'local-project';
-
-      for (const file of fileList) {
-        const rawRel = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
-        if (ignoredSegments.some(seg => rawRel.includes(seg))) continue;
-        const ext = '.' + rawRel.split('.').pop().toLowerCase();
-        if (!validExts.includes(ext)) continue;
-        if (file.size > 350000) continue;
-
-        const parts = rawRel.split('/');
-        if (parts.length > 1) rootFolder = parts[0];
-        const normalizedPath = parts.length > 1 ? parts.slice(1).join('/') : rawRel;
-
+      const relativePaths = fileList.map(file => (file.webkitRelativePath || '').replace(/\\/g, '/'));
+      const root = relativePaths[0].split('/')[0];
+      const sharedRoot = root && relativePaths.every(path => path.includes('/') && path.split('/')[0] === root);
+      const rootFolder = sharedRoot ? root : 'local-project';
+      const collected = [], skipped = [], seen = new Set(), reported = new Set();
+      function skip(path, reason, directory = false) {
+        const key = `${reason}:${path}`;
+        if (!directory || !reported.has(key)) { skipped.push({ path, reason }); reported.add(key); }
+      }
+      for (let index = 0; index < fileList.length; index++) {
+        const file = fileList[index];
+        const rawPath = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+        const normalizedPath = (sharedRoot ? rawPath.slice(root.length + 1) : rawPath).split('/').filter(Boolean).join('/');
+        // Each webkitRelativePath root represents a selected folder, even in a mixed selection.
+        // Retain mixed root prefixes in graph/report paths, but classify only below that root.
+        const hasSelectedRoot = relativePaths[index].includes('/');
+        const policyPath = hasSelectedRoot ? rawPath.slice(rawPath.indexOf('/') + 1) : normalizedPath;
+        const reportPrefix = hasSelectedRoot && !sharedRoot ? rawPath.slice(0, rawPath.indexOf('/') + 1) : '';
+        const decision = CartographIntake.checkFile(policyPath, file.size);
+        if (!decision.include) { skip(reportPrefix + decision.skippedPath, decision.reason, decision.skippedPath !== policyPath); continue; }
+        if (seen.has(normalizedPath)) { skip(normalizedPath, 'duplicate'); continue; }
+        seen.add(normalizedPath);
         try {
-          const content = await file.text();
+          const content = index === 0 && singleText !== undefined ? singleText : await file.text();
           collected.push({ path: normalizedPath, content });
-        } catch (e) {}
+        } catch (error) { skip(normalizedPath, 'unreadable'); }
       }
-
-      if (collected.length === 0) {
-        showToast('No supported code files (.ts, .tsx, .js, .py, .go) found in selection', 'warn');
+      renderIntakeReport(collected.length, skipped);
+      if (!collected.length) {
+        showToast(`No files included; existing map kept. ${skipped.length} entries skipped — open Last intake for reasons.`, 'warn');
         return;
       }
-
-      markPresetSelectCustom(`local: ${rootFolder} (${collected.length} files)`);
-
-      parseRepositoryIntoGraph(collected, rootFolder, `Local folder loaded directly from disk (${collected.length} files)`);
-      showToast(`Parsed ${collected.length} local files from "${rootFolder}"`);
+      parseRepositoryIntoGraph(collected, rootFolder, `Local folder loaded directly from disk (${collected.length} files)`, undefined, { customLabel: `local: ${rootFolder} (${collected.length} files)` });
+      showToast(`Parsed ${collected.length} local files from "${rootFolder}"${skipped.length ? `; ${skipped.length} entries skipped — open Last intake for reasons` : ''}`);
     }
 
     // Relabels the preset dropdown with an opt-out "loaded from disk/server"
@@ -217,11 +248,11 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function openAddFileModal() {
-      document.getElementById('modalAddFile').classList.remove('hidden');
+      openUiOverlay('add-file');
     }
 
     function closeAddFileModal() {
-      document.getElementById('modalAddFile').classList.add('hidden');
+      closeUiOverlay();
     }
 
     function submitCustomFile() {
@@ -233,8 +264,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       }
 
       const updatedFiles = [...state.rawFiles.filter(f => f.path !== pathInput), { path: pathInput, content: codeInput }];
-      parseRepositoryIntoGraph(updatedFiles, state.repoName, state.repoDescription);
-      selectFileNode(pathInput, true);
+      parseRepositoryIntoGraph(updatedFiles, state.repoName, state.repoDescription, undefined, { selection: { path: pathInput, pan: true } });
       closeAddFileModal();
       showToast(`Parsed and added ${pathInput} to dependency graph`);
     }
@@ -273,47 +303,49 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function switchMainView(view) {
+      rememberFileListScroll();
       state.activeView = view;
       document.getElementById('viewExplorer').classList.toggle('hidden', view !== 'explorer');
       document.getElementById('viewEvals').classList.toggle('hidden', view !== 'evals');
       document.getElementById('viewSpecs').classList.toggle('hidden', view !== 'specs');
 
-      const tabMap = {
-        explorer: 'navTabExplorer',
-        evals: 'navTabEvals',
-        specs: 'navTabSpecs'
-      };
-      Object.entries(tabMap).forEach(([k, id]) => {
-        const btn = document.getElementById(id);
-        btn.className = k === view
-          ? 'px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all bg-indigo-600 text-white shadow-sm'
-          : 'px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all text-slate-300 hover:text-white';
-      });
-
-      if (view === 'explorer') {
-        setTimeout(() => drawDependencyGraph(), 20);
+      document.querySelectorAll('[data-view]').forEach(btn => btn.setAttribute('aria-current', btn.dataset.view === view ? 'page' : 'false'));
+      Object.entries({explorer:'navTabExplorer',evals:'navTabEvals',specs:'navTabSpecs'}).forEach(([key,id]) => document.getElementById(id).setAttribute('aria-current', key === view ? 'page' : 'false'));
+      document.getElementById('btnOpenLocalFolder').classList.toggle('primary', view === 'explorer');
+      const fromNavigation = state.ui.overlay === 'navigation';
+      if (fromNavigation) closeUiOverlay(false);
+      syncResponsiveShell();
+      if (fromNavigation) {
+        const explorerRegion = getExplorerFocusRegion();
+        const destination = document.getElementById({explorer:explorerRegion,evals:'viewEvals',specs:'viewSpecs'}[view]);
+        destination.tabIndex = -1;
+        destination.focus();
       }
     }
 
     function switchRightPanelTab(tab) {
       state.rightPanelTab = tab;
+      if (window.innerWidth <= 640 && ['impact','ask'].includes(state.ui.phonePane)) state.ui.phonePane = tab === 'agent' ? 'ask' : 'impact';
       document.getElementById('panelInspectorContent').classList.toggle('hidden', tab !== 'inspector');
       document.getElementById('panelAgentContent').classList.toggle('hidden', tab !== 'agent');
-
-      document.getElementById('rightTabInspector').className = tab === 'inspector'
-        ? 'flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-slate-800 text-white shadow-sm border border-slate-700/70'
-        : 'flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-slate-400 hover:text-slate-200';
-
-      document.getElementById('rightTabAgent').className = tab === 'agent'
-        ? 'flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-slate-800 text-white shadow-sm border border-slate-700/70'
-        : 'flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-slate-400 hover:text-slate-200';
+      ['Inspector','Agent'].forEach(name => {
+        const button = document.getElementById('rightTab' + name);
+        button.className = 'inspector-tab';
+        button.setAttribute('role','tab');
+        button.setAttribute('aria-selected', String(tab === name.toLowerCase()));
+      });
     }
 
     function handlePresetChange(presetKey) {
       const preset = PRESET_REPOS[presetKey];
       if (!preset) return;
-      state.selectedFile = '';
-      parseRepositoryIntoGraph(preset.files, preset.name, preset.description);
+      try {
+        parseRepositoryIntoGraph(preset.files, preset.name, preset.description, { kind: 'sample', scannedAt: null }, { selection: 'hotspot' });
+      } catch (error) {
+        // Native change events update the select before this handler runs.
+        document.getElementById('repoPresetSelect').value = adoptedPresetValue;
+        throw error;
+      }
       showToast(`Loaded repository: ${preset.name} (${preset.files.length} files)`);
     }
 
@@ -335,7 +367,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       document.querySelectorAll('.layer-pill').forEach(btn => {
         const isMatch = btn.dataset.layer === layer;
         btn.className = isMatch
-          ? 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-600 text-white'
+          ? 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-white'
           : 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700';
       });
       renderFileListSidebar();
@@ -347,17 +379,22 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         ? 'px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-rose-300'
         : 'px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200';
       document.getElementById('sortBtnPath').className = mode === 'path'
-        ? 'px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-indigo-300'
+        ? 'px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-200'
         : 'px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200';
       renderFileListSidebar();
     }
 
     function openSettingsModal() {
-      document.getElementById('modalSettings').classList.remove('hidden');
+      const config = state.agentConfig;
+      document.getElementById('settingsEngineSelect').value = config.engine;
+      document.getElementById('settingsEndpointInput').value = config.endpoint;
+      document.getElementById('settingsModelInput').value = config.model;
+      document.getElementById('settingsApiKeyInput').value = config.apiKey;
+      openUiOverlay('settings');
     }
 
     function closeSettingsModal() {
-      document.getElementById('modalSettings').classList.add('hidden');
+      closeUiOverlay();
     }
 
     function handleEngineSelectChange(val) {
@@ -423,13 +460,13 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       const container = document.getElementById('toastContainer');
       if (!container) return;
       const el = document.createElement('div');
-      const borderColor = type === 'warn' ? 'border-amber-500/50 text-amber-200' : 'border-indigo-500/50 text-slate-100';
-      el.className = `glass-panel ${borderColor} px-3.5 py-2 rounded-lg text-xs font-medium shadow-xl transition-all duration-200`;
+      el.className = 'quiet-toast';
+      el.dataset.kind = type;
       el.textContent = msg;
       container.appendChild(el);
       setTimeout(() => {
         el.style.opacity = '0';
-        setTimeout(() => el.remove(), 220);
+        setTimeout(() => el.remove(), 150);
       }, 2800);
     }
 
@@ -451,17 +488,18 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         if (saved) Object.assign(state.agentConfig, JSON.parse(saved));
       } catch (e) {}
 
+      initResponsiveShell();
       initCanvasInteractions();
       initGlobalDragAndDrop();
 
+      const startupGraph = state.graph;
       let loadedFromServer = false;
       try {
         const response = await fetch('/api/local-repo');
         if (response.ok) {
           const payload = await response.json();
-          if (payload && payload.graph && Array.isArray(payload.graph.nodes)) {
-            applyParsedGraph(payload.graph);
-            markPresetSelectCustom(`local: ${payload.name || payload.graph.name || 'local repository'} (${(payload.graph.nodes || []).length} files)`);
+          if (state.graph === startupGraph && payload && payload.graph && Array.isArray(payload.graph.nodes)) {
+            applyParsedGraph(payload.graph, { kind: 'local', scannedAt: payload.scannedAt }, { customLabel: `local: ${payload.name || payload.graph.name || 'local repository'} (${(payload.graph.nodes || []).length} files)` });
             loadedFromServer = true;
             showToast(`Loaded scanned repository: ${payload.name || payload.graph.name || 'local'}`);
           }
@@ -470,21 +508,329 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         // Opened directly from disk (file://) — fall back to the bundled sample repo.
       }
 
-      if (!loadedFromServer) {
+      const startupStillCurrent = loadedFromServer || state.graph === startupGraph;
+      if (startupStillCurrent && !loadedFromServer) {
         const initialPreset = PRESET_REPOS['cartograph-saas'];
-        parseRepositoryIntoGraph(initialPreset.files, initialPreset.name, initialPreset.description);
+        parseRepositoryIntoGraph(initialPreset.files, initialPreset.name, initialPreset.description, { kind: 'sample', scannedAt: null });
       }
 
-      runAgentQuery('Where does auth get enforced across the repository?');
-      switchRightPanelTab('inspector');
-      if (state.graph.nodes.some(n => n.path === 'src/lib/db/supabase.ts')) {
-        selectFileNode('src/lib/db/supabase.ts', false);
+      if (startupStillCurrent) {
+        runAgentQuery('Where does auth get enforced across the repository?');
+        switchRightPanelTab('inspector');
+        if (state.graph.nodes.some(n => n.path === 'src/lib/db/supabase.ts')) {
+          selectFileNode('src/lib/db/supabase.ts', false);
+        }
       }
-
-      window.addEventListener('resize', () => {
-        computeGraphNodePositions();
-      });
+      window.addEventListener('resize', syncResponsiveShell);
+      syncResponsiveShell();
 
       startCanvasAnimationLoop();
       lucide.createIcons();
     });
+
+    // User file jumps share validation, overlay ownership and responsive focus.
+    // Internal agent selection intentionally continues to call selectFileNode.
+    function selectFileFromUi(path, panToNode = true) {
+      if (!state.graph.nodes.some(node => node.path === path)) return;
+      const fromOverlay = !!state.ui.overlay;
+      const source = document.activeElement;
+      const sourcePath = source?.dataset?.filepath;
+      let sourceRegion = source?.parentElement;
+      while (sourceRegion && !sourceRegion.id) sourceRegion = sourceRegion.parentElement;
+      const visible = element => element && element.isConnected && !element.disabled && element.getClientRects().length;
+      // Closing a native dialog can reset its scroller before regions move home.
+      rememberFileListScroll();
+      if (fromOverlay) closeUiOverlay(false);
+      switchMainView('explorer');
+      selectFileNode(path, panToNode);
+      let target;
+      if (window.innerWidth <= 640) {
+        setPhonePane('impact');
+        target = document.getElementById('panelInspectorContent');
+      } else if (window.innerWidth <= 1100) {
+        target = document.getElementById('dependencyCanvas');
+      } else if (!fromOverlay) {
+        if (visible(source) && source !== document.body && source !== document.documentElement
+          && source.matches('button, input, select, textarea, a[href], [tabindex]')) target = source;
+        else if (sourcePath && sourceRegion?.isConnected) {
+          // Compare raw paths instead of interpolating a path into a CSS selector.
+          target = Array.from(sourceRegion.querySelectorAll('[data-filepath]'))
+            .find(element => element.dataset.filepath === sourcePath && visible(element));
+        }
+      }
+      target = target || document.getElementById('mapRegion');
+      if (!target.matches('button, input, select, textarea, a[href], [tabindex]')) target.tabIndex = -1;
+      target.focus();
+    }
+
+    // Responsive regions move into the single native sheet, never clone their IDs or state.
+    function setPhonePane(pane) {
+      if (!['files', 'map', 'impact', 'ask'].includes(pane)) return;
+      rememberFileListScroll();
+      state.ui.phonePane = pane;
+      if (pane === 'impact' || pane === 'ask') switchRightPanelTab(pane === 'ask' ? 'agent' : 'inspector');
+      syncResponsiveShell();
+    }
+
+    function toggleInspector() {
+      state.ui.inspectorCollapsed = !state.ui.inspectorCollapsed;
+      syncResponsiveShell();
+    }
+
+    function restoreOverlayRegions() {
+      const palette = document.getElementById('commandPalette');
+      palette.hidden = true;
+      document.body.appendChild(palette);
+      const explorer = document.getElementById('viewExplorer');
+      rememberFileListScroll();
+      const files = document.getElementById('fileBrowser');
+      const inspector = document.getElementById('inspectorRegion');
+      if (files.parentElement !== explorer) explorer.insertBefore(files, document.getElementById('mapRegion'));
+      if (inspector.parentElement !== explorer) explorer.appendChild(inspector);
+      const navigation = document.getElementById('navigationContent');
+      navigation.hidden = true;
+      document.body.appendChild(navigation);
+      document.getElementById('repositorySlot').appendChild(document.getElementById('repoPresetSelect'));
+    }
+
+    function finishUiOverlay(restoreFocus) {
+      const opener = state.ui.overlayOpener;
+      restoreOverlayRegions();
+      state.ui.overlay = null;
+      state.ui.overlayOpener = null;
+      syncResponsiveShell();
+      if (restoreFocus) {
+        const target = [opener, document.getElementById('navigationLauncher'), document.getElementById('commandsLauncher'), document.getElementById('navTabExplorer')]
+          .find(element => element && element.isConnected && element.getClientRects().length && !element.disabled);
+        if (target) target.focus();
+      }
+    }
+
+    function closeUiOverlay(restoreFocus = true) {
+      if (!state.ui.overlay) return;
+      document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+      finishUiOverlay(restoreFocus);
+    }
+
+    function openUiOverlay(kind, opener = document.activeElement) {
+      if (!['navigation','files','inspector','palette','settings','add-file'].includes(kind)) return;
+      // Preserve the persistent launcher when an action transfers between overlays.
+      const returnTarget = state.ui.overlay ? state.ui.overlayOpener : opener;
+      closeUiOverlay(false);
+      state.ui.overlay = kind;
+      state.ui.overlayOpener = returnTarget;
+      const dialog = document.getElementById(kind === 'settings' ? 'modalSettings' : kind === 'add-file' ? 'modalAddFile' : 'shellOverlay');
+      if (dialog.id === 'shellOverlay') {
+        const body = document.getElementById('shellOverlayBody');
+        body.replaceChildren();
+        document.getElementById('shellOverlayTitle').textContent = {navigation:'Navigation',files:'Files',inspector:'Inspector',palette:'Commands'}[kind];
+        if (kind === 'navigation') {
+          const navigation = document.getElementById('navigationContent');
+          navigation.hidden = false;
+          body.appendChild(navigation);
+          document.getElementById('navigationRepositorySlot').appendChild(document.getElementById('repoPresetSelect'));
+        } else if (kind === 'files' || kind === 'inspector') {
+          body.appendChild(document.getElementById(kind === 'files' ? 'fileBrowser' : 'inspectorRegion'));
+        } else {
+          body.appendChild(document.getElementById('commandPalette'));
+          document.getElementById('commandPalette').hidden = false;
+        }
+      }
+      dialog.showModal();
+      restoreFileListScroll();
+    }
+
+    function syncResponsiveShell() {
+      const width = window.innerWidth;
+      const phone = width <= 640;
+      const desktop = width > 1100;
+      if ((phone || desktop) && ['files','inspector'].includes(state.ui.overlay)) { closeUiOverlay(false); return; }
+      const explorer = state.activeView === 'explorer';
+      document.getElementById('compactMapTools').style.display = explorer && !phone && !desktop ? 'flex' : 'none';
+      document.getElementById('phonePaneTabs').style.display = explorer && phone ? 'flex' : 'none';
+      document.getElementById('fileBrowser').dataset.phoneVisible = String(state.ui.phonePane === 'files');
+      document.getElementById('mapRegion').dataset.phoneVisible = String(state.ui.phonePane === 'map');
+      document.getElementById('inspectorRegion').dataset.phoneVisible = String(['impact','ask'].includes(state.ui.phonePane));
+      document.getElementById('inspectorRegion').style.display = desktop && state.ui.inspectorCollapsed ? 'none' : '';
+      document.getElementById('mapEmptyState').hidden = state.graph.nodes.length > 0;
+      document.getElementById('metricCycleBadge').disabled = phone;
+      const hasSelection = state.graph.nodes.some(node => node.path === state.selectedFile);
+      ['btnToggleIsolate','btnSimulateBreak'].forEach(id => document.getElementById(id).disabled = !hasSelection);
+      const toggle = document.getElementById('toggleInspectorBtn');
+      toggle.textContent = state.ui.inspectorCollapsed ? 'Show inspector' : 'Hide inspector';
+      toggle.setAttribute('aria-expanded', String(!state.ui.inspectorCollapsed));
+      document.querySelectorAll('[data-pane]').forEach(button => {
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-selected', String(button.dataset.pane === state.ui.phonePane));
+      });
+      restoreFileListScroll();
+      const canvas = document.getElementById('dependencyCanvas');
+      const visible = canvas.getClientRects().length && canvas.clientWidth && canvas.clientHeight;
+      if (!visible) { state.ui.pendingFit = true; return; }
+      const dimensions = `${canvas.clientWidth}x${canvas.clientHeight}`;
+      if (state.ui.canvasDimensions !== dimensions || state.ui.pendingFit) {
+        state.ui.canvasDimensions = dimensions;
+        state.ui.pendingFit = false;
+        requestAnimationFrame(() => {
+          if (!canvas.getClientRects().length) { state.ui.pendingFit = true; return; }
+          if (typeof fitGraphToViewport === 'function') fitGraphToViewport();
+          else computeGraphNodePositions();
+          drawDependencyGraph();
+          updateShellZoom();
+        });
+      }
+    }
+
+    function initResponsiveShell() {
+      document.querySelectorAll('dialog').forEach(dialog => {
+        dialog.addEventListener('click', event => {
+          const box = dialog.getBoundingClientRect();
+          if (event.target === dialog && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) closeUiOverlay();
+        });
+        dialog.addEventListener('close', () => {
+          if (state.ui.overlay && !document.querySelector('dialog[open]')) finishUiOverlay(true);
+        });
+      });
+      document.addEventListener('click', () => queueMicrotask(updateShellZoom));
+      document.getElementById('dependencyCanvas').addEventListener('wheel', () => queueMicrotask(updateShellZoom));
+      document.addEventListener('keydown', event => {
+        // Chromium can send Tab to browser chrome at native-dialog boundaries.
+        if (state.ui.overlay === 'palette' && event.key === 'Tab') {
+          const controls = Array.from(document.getElementById('shellOverlay').querySelectorAll('button:not([tabindex="-1"]), input')).filter(element => !element.disabled && element.getClientRects().length);
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        if (!event.isComposing && event.keyCode !== 229 && (event.metaKey || event.ctrlKey) && ['k','p'].includes(event.key.toLowerCase()) && !['settings','add-file'].includes(state.ui.overlay)) {
+          event.preventDefault(); openCommandPalette(event.key.toLowerCase() === 'p' ? 'files' : 'commands');
+        }
+      });
+      // ResizeObserver reacts to actual canvas dimensions after sheet/pane transitions.
+      new ResizeObserver(() => syncResponsiveShell()).observe(document.getElementById('mapRegion'));
+      switchMainView(state.activeView);
+    }
+
+    function rememberFileListScroll() {
+      const list = document.getElementById('fileListContainer');
+      if (list.getClientRects().length) state.ui.fileListScrollTop = list.scrollTop;
+    }
+
+    function restoreFileListScroll() {
+      const list = document.getElementById('fileListContainer');
+      if (list.getClientRects().length && state.ui.fileListScrollTop != null) list.scrollTop = state.ui.fileListScrollTop;
+    }
+
+    function updateShellZoom() {
+      document.getElementById('shellZoom').textContent = `${Math.round(state.camera.zoom * 100)}%`;
+    }
+
+    function getPaletteActions() {
+      const hasNodes = state.graph.nodes.length > 0;
+      const selected = state.graph.nodes.some(node => node.path === state.selectedFile);
+      const actions = [];
+      const add = (id, label, run, available = true, reason = '') => actions.push({id,label,run,available,reason:available ? '' : reason});
+      const map = run => () => { switchMainView('explorer'); if (window.innerWidth <= 640) setPhonePane('map'); run(); };
+      [['explorer','Map'],['evals','Evals'],['specs','Docs']].forEach(([view,label]) => add('view-'+view,'Open '+label,()=>switchMainView(view)));
+      [['all','All'],['core','DB & Core'],['parser','Parser'],['agent','Agent'],['api','Routes'],['ui','UI']].forEach(([layer,label]) => add('layer-'+layer,'Layer: '+label+(state.layerFilter===layer?' (current)':''),map(()=>setLayerFilter(layer))));
+      ['dag','force'].forEach(layout=>add('layout-'+layout,'Layout: '+(layout==='dag'?'Dependency':'Force')+(state.graphLayout===layout?' (current)':''),map(()=>setGraphLayout(layout)),hasNodes,'Load files to change layout'));
+      add('isolate','Isolate impact ('+(state.isolateBlastRadius?'on':'off')+')',map(toggleIsolateBlastRadius),selected,'Select a file first');
+      add('simulate','Simulate breaking change ('+(state.simulateBreakingChange?'on':'off')+')',map(toggleBreakSimulation),selected,'Select a file first');
+      add('highest-impact','Go to highest-impact file',selectTopHotspot,hasNodes,'Load files to find the highest-impact file');
+      add('fit','Fit map',map(resetGraphView),hasNodes,'Load files to fit the map');
+      add('zoom-out','Zoom out',map(()=>zoomGraph(.83)),hasNodes,'Load files to zoom');
+      add('zoom-in','Zoom in',map(()=>zoomGraph(1.2)),hasNodes,'Load files to zoom');
+      add('export','Export JSON',exportGraphSnapshot);
+      add('folder','Open folder',triggerFolderUpload);
+      add('add-file','Add file',openAddFileModal);
+      add('settings','Agent settings',openSettingsModal);
+      add('files','Find file',()=>openCommandPalette('files'));
+      add('help','Help: map controls',()=>showToast('Arrows point from importing file to imported file. Drag a card to move it; drag the background to pan. Scroll to zoom. Use Fit to show all files.'));
+      return actions;
+    }
+
+    function comparePalettePaths(a,b) {
+      const left=Array.from(a), right=Array.from(b);
+      for(let i=0;i<Math.min(left.length,right.length);i++) { const difference=left[i].codePointAt(0)-right[i].codePointAt(0); if(difference) return difference; }
+      return left.length-right.length;
+    }
+
+    function getPaletteResults(query, mode) {
+      const needle=String(query || '').trim().toLowerCase();
+      const characters=Array.from(needle);
+      const rank=path=>{
+        const lower=path.toLowerCase();
+        if(lower===needle) return 0;
+        if(lower.split('/').pop().startsWith(needle)) return 1;
+        if(lower.includes(needle)) return 2;
+        let index=0; for(const character of lower) if(character===characters[index]) index++;
+        return index===characters.length ? 3 : -1;
+      };
+      const files=state.graph.nodes.map(node=>({path:node.path,rank:rank(node.path)})).filter(node=>node.rank>=0).sort((a,b)=>a.rank-b.rank||comparePalettePaths(a.path,b.path)).map(node=>({id:'file-'+node.path,kind:'file',label:node.path,path:node.path,available:true,reason:''}));
+      const actions=mode==='files'?[]:getPaletteActions().filter(action=>action.label.toLowerCase().includes(needle)).map(({id,label,available,reason})=>({id,kind:'action',label,available,reason}));
+      const results=actions.concat(files);
+      return {results:results.slice(0,50),matchCount:results.length};
+    }
+
+    function openCommandPalette(mode = 'commands') {
+      state.ui.paletteMode=mode==='files'?'files':'commands';
+      state.ui.paletteQuery='';state.ui.paletteActiveIndex=-1;
+      openUiOverlay('palette');
+      const input=document.getElementById('paletteInput');input.value='';
+      renderCommandPalette();input.focus();
+    }
+
+    function setPaletteMode(mode) {
+      state.ui.paletteMode=mode;state.ui.paletteActiveIndex=-1;
+      renderCommandPalette();document.getElementById('paletteInput').focus();
+    }
+
+    function renderCommandPalette() {
+      const {results,matchCount}=getPaletteResults(state.ui.paletteQuery,state.ui.paletteMode);
+      state.ui.paletteResults=results;
+      if(!results[state.ui.paletteActiveIndex]?.available) state.ui.paletteActiveIndex=results.findIndex(result=>result.available);
+      document.getElementById('shellOverlayTitle').textContent=state.ui.paletteMode==='files'?'Find file':'Commands';
+      document.querySelectorAll('[data-palette-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.paletteMode===state.ui.paletteMode)));
+      const list=document.getElementById('paletteResults');list.replaceChildren();
+      results.forEach((result,index)=>{
+        const row=document.createElement('button');row.type='button';row.id='palette-option-'+encodeURIComponent(result.id);row.setAttribute('role','option');row.setAttribute('aria-selected',String(index===state.ui.paletteActiveIndex));row.setAttribute('aria-disabled',String(!result.available));row.tabIndex=-1;
+        row.textContent=result.label;if(result.path)row.dataset.filepath=result.path;
+        if(result.reason){const reason=document.createElement('small');reason.textContent=result.reason;row.appendChild(reason);}
+        if(result.kind==='action')row.addEventListener('click',()=>runPaletteResult(result));
+        list.appendChild(row);
+      });
+      const input=document.getElementById('paletteInput');
+      input.setAttribute('aria-label',state.ui.paletteMode==='files'?'Find file':'Search commands and files');
+      const active=list.children[state.ui.paletteActiveIndex];
+      if(active){input.setAttribute('aria-activedescendant',active.id);active.scrollIntoView({block:'nearest'});}else input.removeAttribute('aria-activedescendant');
+      document.getElementById('paletteCount').textContent=matchCount ? `${matchCount} matches${matchCount>50?' · showing 50':''}` : 'No results';
+    }
+
+    function handlePaletteKeydown(event) {
+      if(event.isComposing || event.keyCode===229)return;
+      if(['ArrowDown','ArrowUp'].includes(event.key)){
+        event.preventDefault();const results=state.ui.paletteResults||[];const available=results.map((result,index)=>result.available?index:-1).filter(index=>index>=0);
+        if(available.length){const current=available.indexOf(state.ui.paletteActiveIndex);state.ui.paletteActiveIndex=available[(current+(event.key==='ArrowDown'?1:-1)+available.length)%available.length];renderCommandPalette();}
+      }else if(event.key==='Enter'){event.preventDefault();runPaletteResult((state.ui.paletteResults||[])[state.ui.paletteActiveIndex]);}
+    }
+
+    function runPaletteResult(result) {
+      if(!result)return;
+      if(result.kind==='file'){
+        selectFileFromUi(result.path);return;
+      }
+      const action=getPaletteActions().find(action=>action.id===result.id);
+      if(!action?.available)return;
+      // Preserve the original launcher when transferring into another native modal.
+      if(['settings','add-file','files'].includes(action.id)){action.run();return;}
+      closeUiOverlay(false);action.run();
+      if(!state.ui.overlay){
+        const region=document.getElementById(state.activeView==='evals'?'viewEvals':state.activeView==='specs'?'viewSpecs':getExplorerFocusRegion());
+        region.tabIndex=-1;region.focus();
+      }
+    }
+
+    function getExplorerFocusRegion() {
+      return window.innerWidth <= 640
+        ? { files: 'fileBrowser', map: 'mapRegion', impact: 'panelInspectorContent', ask: 'panelAgentContent' }[state.ui.phonePane]
+        : 'mapRegion';
+    }

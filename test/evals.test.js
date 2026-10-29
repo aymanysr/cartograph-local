@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { parseRepository } = require('../lib/cartograph-parser.js');
 const CartographAgent = require('../lib/cartograph-agent.js');
 const {
+  evaluateSuite,
   buildBenchmarkCases,
   collectTraceFiles,
   scoreCase,
@@ -19,7 +20,7 @@ const PAGE = 'src/app/page.tsx';
 const GHOST = 'src/fake/ghost.ts';
 
 function chip(path) {
-  return `<chip>${path}</chip>`;
+  return `<chip>${path.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")}</chip>`;
 }
 
 function buildFixtureGraph() {
@@ -44,18 +45,6 @@ function buildFixtureGraph() {
     ],
     { repoName: 'eval-fixture' }
   );
-}
-
-function runStrictCase(graph, question, expectedFiles) {
-  const plan = CartographAgent.buildAgentPlan(question, graph, chip);
-  const result = scoreCase({
-    graph,
-    expectedFiles,
-    citedFiles: plan.citedFiles,
-    traceFiles: collectTraceFiles(plan),
-    requireProvenance: true,
-  });
-  return { plan, result };
 }
 
 test('buildBenchmarkCases produces three graph-derived cases that route into real branches', () => {
@@ -100,10 +89,7 @@ test('naive benchmark lists include invented paths while case questions are real
 
 test('strict runs pass all cases: grounded, proven, full recall', () => {
   const graph = buildFixtureGraph();
-  const cases = buildBenchmarkCases(graph);
-
-  for (const tc of cases) {
-    const { plan, result } = runStrictCase(graph, tc.question, tc.expectedFiles);
+  for (const {tc,plan,result} of evaluateSuite(graph,'strict',chip).entries) {
 
     assert.equal(result.passed, true, `strict case ${tc.id} should PASS (grounded + proven + full recall)`);
     assert.equal(result.hallucinatedPaths.length, 0);
@@ -164,19 +150,7 @@ test('naive mode grounds by existence only (no trace provenance)', () => {
   assert.equal(result.groundednessScore, 100);
   assert.equal(result.passed, true, 'existence-only mode lets proven-but-real citations pass');
 
-  // ...but the naive demo fallbacks still fail because they cite invented paths.
-  const cases = buildBenchmarkCases(graph);
-  for (const tc of cases) {
-    const naive = scoreCase({
-      graph,
-      expectedFiles: tc.expectedFiles,
-      citedFiles: tc.naiveCited,
-      traceFiles: [],
-      requireProvenance: false,
-    });
-    assert.equal(naive.passed, false, `naive case ${tc.id} should FAIL`);
-    assert.ok(naive.hallucinatedPaths.length > 0, `naive case ${tc.id} should catch hallucinations`);
-  }
+
 });
 
 test('recall measures expected coverage, independently of grounding', () => {
@@ -215,28 +189,14 @@ test('collectTraceFiles unions step files in order and dedupes', () => {
   assert.equal(trace.length, seen.size, 'trace contains exactly the union of step files');
 });
 
-test('computeSuiteSummary aggregates real percentages and average step latency', () => {
-  const graph = buildFixtureGraph();
-  const cases = buildBenchmarkCases(graph);
-  const plans = [];
-  const results = cases.map((tc) => {
-    const { plan, result } = runStrictCase(graph, tc.question, tc.expectedFiles);
-    plans.push(plan);
-    return result;
-  });
-
-  const summary = computeSuiteSummary(results, plans);
-
-  assert.equal(summary.totalCases, 3);
-  assert.equal(summary.passCount, 3);
-  assert.equal(summary.groundednessScore, 100);
-  assert.equal(summary.recallScore, 100);
-  assert.equal(summary.hallucinatedCount, 0);
-  assert.equal(summary.unprovenCount, 0);
-
-  const rawAvgSteps = plans.reduce((sum, p) => sum + p.steps.length, 0) / plans.length;
-  assert.equal(summary.avgSteps, Math.round(rawAvgSteps * 10) / 10, 'avgSteps is rounded to one decimal');
-  assert.equal(Number.isFinite(summary.avgSteps), true);
+test('computeSuiteSummary weights totals rather than averaging case percentages',()=>{
+  const graph=buildFixtureGraph();
+  const results=[scoreCase({graph,expectedFiles:[VERIFY],citedFiles:[VERIFY],traceFiles:[VERIFY],requireProvenance:true}),scoreCase({graph,expectedFiles:[VERIFY,ROUTES,PAGE],citedFiles:[VERIFY,GHOST],traceFiles:[VERIFY],requireProvenance:true})];
+  const summary=computeSuiteSummary(results,[{steps:[{},{}]},{steps:[{}]}]);
+  assert.equal(summary.totalCases,2);assert.equal(summary.passCount,1);
+  assert.equal(summary.groundednessScore,66.7);assert.equal(summary.recallScore,50);
+  assert.equal(summary.hallucinatedCount,1);assert.equal(summary.unprovenCount,0);
+  assert.equal(summary.avgSteps,1.5);
 });
 
 test('scoreCase guards against empty citations and empty expectations', () => {
@@ -263,4 +223,55 @@ test('scoreCase guards against empty citations and empty expectations', () => {
   assert.equal(noExpected.recallScore, 100);
   assert.equal(noExpected.groundednessScore, 100);
   assert.equal(noExpected.passed, true);
+});
+
+// These assertions exercise the complete production run, rather than assembling
+// a second suite runner in the test.
+test('evaluateSuite executes real strict plans, trace provenance and weighted totals deterministically', () => {
+  const graph = buildFixtureGraph(), before = JSON.stringify(graph);
+  const run = evaluateSuite(graph, 'strict', chip);
+  assert.deepEqual(Object.keys(run), ['isStrict','cases','entries','summary']);
+  assert.equal(run.isStrict, true);
+  assert.equal(run.entries.length, 3);
+  for (const {tc,plan,result} of run.entries) {
+    assert.deepEqual(plan, CartographAgent.buildAgentPlan(tc.question,graph,chip));
+    assert.ok(plan.steps.length > 0);
+    assert.deepEqual(result, scoreCase({graph,expectedFiles:tc.expectedFiles,citedFiles:plan.citedFiles,traceFiles:collectTraceFiles(plan),requireProvenance:true}));
+    assert.equal(result.passed,true);
+  }
+  assert.deepEqual(run.summary, computeSuiteSummary(run.entries.map(e=>e.result),run.entries.map(e=>e.plan)));
+  assert.deepEqual(evaluateSuite(graph,'strict',chip),run);
+  assert.equal(JSON.stringify(graph),before);
+});
+test('evaluateSuite naive uses existence-only weighted scoring with no planner or formatter', () => {
+  const graph=buildFixtureGraph(), original=CartographAgent.buildAgentPlan;
+  CartographAgent.buildAgentPlan=()=>{throw Error('planner must not run')};
+  try {
+    const run=evaluateSuite(graph,'naive',()=>{throw Error('formatter must not run')});
+    assert.equal(run.isStrict,false);
+    assert.equal(run.summary.avgSteps,0);
+    assert.equal(run.summary.groundednessScore,Math.round(run.summary.groundedCount/run.summary.totalCited*1000)/10);
+    assert.ok(run.summary.hallucinatedCount>0);
+    for(const {tc,plan,result} of run.entries) {
+      assert.equal(plan,null);
+      assert.deepEqual(result,scoreCase({graph,expectedFiles:tc.expectedFiles,citedFiles:tc.naiveCited,traceFiles:[],requireProvenance:false}));
+    }
+    const realFake=parseRepository(['src/lib/db/connection-pool.ts','src/services/legacy-cache.ts','src/middleware/session-cookie.ts','src/utils/file-reader.ts'].map(path=>({path,content:'export const a=1;'})));
+    assert.equal(evaluateSuite(realFake,'naive',chip).summary.hallucinatedCount,0);
+  } finally {CartographAgent.buildAgentPlan=original}
+});
+test('evaluateSuite empty graph retains aggregate semantics; invalid mode rejects before graph access',()=>{
+  for(const mode of ['strict','naive']) {
+    const run=evaluateSuite({nodes:[]},mode,chip);
+    assert.deepEqual(run.entries,[]);assert.deepEqual(run.cases,[]);
+    assert.deepEqual(run.summary,computeSuiteSummary([],[]));
+  }
+  for(const mode of [undefined,'STRICT','',null]) assert.throws(()=>evaluateSuite({get nodes(){throw Error('graph accessed')}},mode,chip),/mode/i);
+});
+test('evaluateSuite forwards raw special paths through caller safe formatter',()=>{
+  const path='src/odd<&"\'.js', graph=parseRepository([{path,content:'export const a=1;'}]);
+  const seen=[];const run=evaluateSuite(graph,'strict',p=>{seen.push(p);return chip(p)});
+  assert.ok(seen.includes(path));
+  assert.ok(run.entries.every(e=>e.plan.answerHtml.includes(chip(path))));
+  assert.ok(run.entries.every(e=>e.result.citedFiles.includes(path)));
 });

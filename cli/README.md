@@ -30,7 +30,7 @@ non-flag argument is treated as `targetDir`. Non-numeric values are tolerated:
 `--top 0` (or a negative value) silently keeps the default `10`, and a
 non-numeric `--serve` value falls back to port `4173` while the bare value is
 still treated as `targetDir`. `--out` overwrites an existing file.
-A missing target directory throws from `fs.readdirSync`; a busy `--serve` port
+A missing, unreadable or non-directory target prints a clear fatal scan error; a busy `--serve` port
 fails with Node's `EADDRINUSE`. Run the commands below for the supported surface.
 
 ## Scan scope
@@ -41,9 +41,15 @@ The walker is deliberately conservative:
 | --- | --- |
 | Included extensions | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.py`, `.go`, `.css`, `.json` |
 | Ignored directories | `node_modules`, `.git`, `.next`, `dist`, `build`, `out`, `coverage`, `.turbo`, `.vercel`, `__pycache__`, `.venv`, `venv`, `vendor`, `target` |
-| Hidden entries | Skipped (any name starting with `.`); `.env.example` is exempt from the hidden check but still filtered by extension |
-| File size limit | 500,000 characters (UTF-16 code units); larger files are skipped silently after reading |
-| Unreadable files | Skipped silently |
+| Hidden entries | Any name starting with `.` is skipped |
+| File size limit | 500,000 bytes inclusive, checked before and after reading actual bytes |
+| Unreadable files/directories | Reported while continuing with siblings; a bad root is fatal |
+| Symlinks | Not followed; reported as skipped entries |
+
+The shared `lib/cartograph-intake.js` policy also runs in the browser. The selected
+root is not filtered. Reason counts and up to 100 skipped paths are printed;
+any additional entries are counted as omitted details. A pruned directory is one
+entry, with no invented descendant count. Snapshot schemas are unchanged.
 
 The shared parser extracts imports and exports from JS/TS, Python, and Go. CSS
 and JSON files are still added as graph nodes, but the parser's import rules are

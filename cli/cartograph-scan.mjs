@@ -16,43 +16,67 @@ import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import CartographParser from '../lib/cartograph-parser.js';
+import CartographIntake from '../lib/cartograph-intake.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const IGNORED_DIRS = new Set([
-  'node_modules', '.git', '.next', 'dist', 'build', 'out', 'coverage',
-  '.turbo', '.vercel', '__pycache__', '.venv', 'venv', 'vendor', 'target'
-]);
-
-const CODE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.css', '.json'
-]);
-
-function walkDir(rootDir, currentDir = rootDir, files = []) {
-  const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name.startsWith('.') && entry.name !== '.env.example') continue;
-    const fullPath = path.join(currentDir, entry.name);
-    const relPath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
-    if (entry.isDirectory()) {
-      if (!IGNORED_DIRS.has(entry.name)) {
-        walkDir(rootDir, fullPath, files);
-      }
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (CODE_EXTENSIONS.has(ext)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          if (content.length <= 500_000) {
-            files.push({ path: relPath, content });
-          }
-        } catch {
-          // Skip unreadable binary/locked files
+function walkDir(rootDir, skipped) {
+  const files = [], seen = new Set();
+  function walk(currentDir, relative = '') {
+    let entries;
+    try {
+      if (!fs.lstatSync(currentDir).isDirectory()) throw new Error('Root must be a directory, not a file or symlink');
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch (error) {
+      if (!relative) throw new Error(`Cannot scan repository "${rootDir}": ${error.message}`);
+      skipped.push({ path: relative.replace(/\\/g, '/'), reason: 'unreadable' });
+      return;
+    }
+    entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      // Keep literal filesystem names for I/O; graph/report paths use normalized separators.
+      const filesystemRelative = relative ? `${relative}/${entry.name}` : entry.name;
+      const relPath = filesystemRelative.replace(/\\/g, '/').split('/').filter(Boolean).join('/');
+      if (entry.isSymbolicLink()) { skipped.push({ path: relPath, reason: 'symlink' }); continue; }
+      const decision = entry.isDirectory() ? CartographIntake.checkDirectory(relPath) : CartographIntake.checkFile(relPath, 0);
+      if (!decision.include) { skipped.push({ path: decision.skippedPath, reason: decision.reason }); continue; }
+      if (entry.isDirectory()) { walk(fullPath, filesystemRelative); continue; }
+      if (!entry.isFile()) { skipped.push({ path: relPath, reason: 'unsupported' }); continue; }
+      if (seen.has(relPath)) { skipped.push({ path: relPath, reason: 'duplicate' }); continue; }
+      seen.add(relPath);
+      let descriptor;
+      try {
+        // O_NOFOLLOW also rejects a file replaced by a symlink after readdir.
+        descriptor = fs.openSync(fullPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        const stat = fs.fstatSync(descriptor);
+        if (!stat.isFile()) throw new Error('Not a regular file');
+        let decision = CartographIntake.checkFile(relPath, stat.size);
+        if (decision.include) {
+          const bytes = fs.readFileSync(descriptor);
+          decision = CartographIntake.checkFile(relPath, bytes.length);
+          if (decision.include) files.push({ path: relPath, content: bytes.toString('utf8') });
         }
-      }
+        if (!decision.include) skipped.push({ path: decision.skippedPath, reason: decision.reason });
+      } catch {
+        skipped.push({ path: relPath, reason: 'unreadable' });
+      } finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
     }
   }
+  walk(rootDir);
   return files;
+}
+
+function printIntakeReport(files, skipped) {
+  const counts = {};
+  for (const entry of skipped) counts[entry.reason] = (counts[entry.reason] || 0) + 1;
+  console.log(`[Cartograph CLI] Intake: ${files.length} included, ${skipped.length} skipped entries`);
+  if (skipped.length) {
+    console.log(`  Reasons: ${Object.entries(counts).map(([reason, count]) => `${reason}: ${count}`).join(', ')}`);
+    for (const entry of skipped.slice(0, 100)) console.log(`  - ${entry.path} (${entry.reason})`);
+    if (skipped.length > 100) console.log(`  … ${skipped.length - 100} more skipped entries not displayed`);
+    console.log('  Excluded directories count as one entry; their contents were not scanned.');
+  }
 }
 
 function parseArgs(argv) {
@@ -210,7 +234,11 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
 
   console.log(`\n[Cartograph CLI] Scanning repository: ${args.targetDir}`);
-  const files = walkDir(args.targetDir);
+  const skipped = [];
+  let files;
+  try { files = walkDir(args.targetDir, skipped); }
+  catch (error) { console.error(`[Cartograph CLI] ${error.message}`); process.exitCode = 1; return; }
+  printIntakeReport(files, skipped);
   const graph = CartographParser.parseRepository(files, {
     repoName: path.basename(args.targetDir) || 'local-repository',
     repoDescription: `Deterministic scan of ${args.targetDir}`,

@@ -1,0 +1,200 @@
+<h2>Data-terminal — refined to real fidelity</h2>
+<p class="subtitle">The locked direction, now with the actual chrome decisions: SF text + JetBrains Mono figures, 1px-line selections, rose/amber demoted to data only. React in the terminal — anything still obnoxious?</p>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap');
+  .dtv { --ground:#171719; --surface:#131217; --raised:#212023; --border:#222224; --rule:#1b1a1f; --muted:#8a8c92; --faint:#5f6065; --ink:#fff; --accent:#4a8ad6; --rose:#e5566f; --amber:#d9a441;
+    font-family:-apple-system,"SF Pro Text","Public Sans","Segoe UI",sans-serif; background:var(--ground); color:var(--ink); border-radius:10px; overflow:hidden;
+    height: 560px; display:flex; font-size:12px; text-align:left; box-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .dtv * { box-sizing:border-box; }
+  .dtv .mono { font-family:"JetBrains Mono","SF Mono",Menlo,monospace; font-variant-numeric:tabular-nums; }
+
+  /* rail */
+  .dtv .rail { width:46px; background:var(--ground); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:10px 0; flex-shrink:0; }
+  .dtv .rail .fork { width:22px; height:22px; margin-bottom:14px; color:#fff; }
+  .dtv .rbutton { width:46px; height:42px; display:flex; align-items:center; justify-content:center; color:var(--muted); position:relative; }
+  .dtv .rbutton.on { color:#fff; }
+  .dtv .rbutton.on::after { content:""; position:absolute; left:0; top:11px; bottom:11px; width:1px; background:var(--accent); }
+  .dtv .r svg { width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:1.5; }
+  .dtv .rail .tail { margin-top:auto; }
+
+  /* top bar */
+  .dtv .top { display:flex; flex-direction:column; flex:1; min-width:0; }
+  .dtv .bar { height:40px; display:flex; align-items:center; gap:14px; padding:0 14px 0 4px; flex-shrink:0; }
+  .dtv .name { font-size:13px; font-weight:600; color:#fff; }
+  .dtv .stamp { font-size:11px; color:var(--faint); }
+  .dtv .bar .grow { flex:1; }
+  .dtv .ghost { font-size:11px; color:var(--muted); padding:5px 9px; border-radius:6px; border:1px solid var(--border); background:var(--surface); }
+  .dtv .ghost b { color:#c9cacd; font-weight:500; }
+  .dtv .kbd { font-size:10px; padding:4px 8px; border:1px solid var(--border); border-radius:6px; color:var(--faint); background:transparent; }
+  .dtv .primary { font-size:11.5px; font-weight:600; color:#171719; background:#fff; padding:6px 12px; border-radius:6px; }
+
+  /* status bar */
+  .dtv .status { height:26px; border-top:1px solid var(--border); display:flex; align-items:center; gap:16px; padding:0 16px; font-size:11px; color:var(--muted); flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .dtv .status .hot { color:#c9cacd; text-decoration:underline; text-decoration-color:#3a3a3e; text-underline-offset:2px; }
+  .dtv .status .grow { flex:1; }
+  .dtv .status .zoom { display:flex; gap:10px; }
+  .dtv .status .zoom span { cursor:pointer; }
+
+  /* main row */
+  .dtv .main { flex:1; display:flex; min-height:0; }
+
+  /* file browser */
+  .dtv .files { width:236px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .dtv .fsearch { margin:10px 10px 0; display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:7px; padding:6px 8px; background:var(--ground); color:var(--faint); font-size:11px; }
+  .dtv .fsearch input { all:unset; flex:1; font-size:11px; color:#e2e3e5; }
+  .dtv .fsort { margin:8px 10px 4px; display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; width:max-content; font-size:10.5px; }
+  .dtv .fsort span { padding:3px 10px; color:var(--muted); }
+  .dtv .fsort span.on { color:#fff; box-shadow:inset 0 -1px 0 var(--accent); }
+  .dtv .fhead { padding:6px 14px 4px; font-size:10.5px; color:var(--faint); display:flex; justify-content:space-between; }
+  .dtv .frow { display:flex; align-items:center; gap:8px; height:30px; padding:0 14px; font-size:11px; color:#c9cacd; border-left:1px solid transparent; cursor:pointer; }
+  .dtv .frow .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dtv .frow .impact { color:var(--faint); font-size:10.5px; }
+  .dtv .frow.hot .impact { color:var(--rose); }
+  .dtv .frow.on { background:var(--raised); border-left:1px solid var(--accent); color:#fff; }
+  .dtv .fgroup { height:26px; display:flex; align-items:center; padding:0 14px; font-size:10.5px; color:var(--faint); }
+
+  /* canvas */
+  .dtv .canvas { flex:1; position:relative; min-width:0; }
+  .dtv canvas-edges { position:absolute; }
+  .dtv .edge { position:absolute; height:1px; background:#2a2a2e; transform-origin:0 0; }
+  .dtv .edge.r1 { background:rgba(229,86,111,.35); }
+  .dtv .edge.r2 { background:rgba(217,164,65,.30); }
+  .dtv .node { position:absolute; border:1px solid var(--border); background:var(--surface); border-radius:6px; padding:6px 9px 7px; line-height:1.25; }
+  .dtv .node .l { font-family:"JetBrains Mono",Menlo,monospace; font-size:10.5px; color:#c9cacd; }
+  .dtv .node .m { font-size:9.5px; color:var(--faint); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .dtv .node.r1 { border-color:#4a2430; } .dtv .node.r1 .l { color:var(--rose); }
+  .dtv .node.r2 { border-color:#3d2f13; } .dtv .node.r2 .l { color:var(--amber); }
+  .dtv .node.gy .l { color:var(--muted); }
+  .dtv .node.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .dtv .node.sel .l { color:#fff; }
+  .dtv .cbtn { position:absolute; z-index:5; font-size:11px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:4px 9px; }
+  .dtv .cbtn.row { display:flex; gap:8px; top:12px; right:12px; }
+
+  /* inspector */
+  .dtv .insp { width:300px; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .dtv .itabs { display:flex; gap:18px; padding:10px 16px 0; border-bottom:1px solid var(--rule); }
+  .dtv .itabs span { font-size:12px; color:var(--muted); padding-bottom:7px; }
+  .dtv .itabs span.on { color:#fff; box-shadow:inset 0 -1px 0 var(--accent); }
+  .dtv .ibody { padding:12px 16px; overflow:auto; }
+  .dtv .ipath { font-family:"JetBrains Mono",Menlo,monospace; font-size:11.5px; color:#fff; }
+  .dtv .big { font-size:30px; font-weight:400; font-variant-numeric:tabular-nums; margin:10px 0 0; }
+  .dtv .big small { font-size:14px; color:var(--muted); font-weight:400; }
+  .dtv .biglab { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .dtv .kpistrip { display:flex; border:1px solid var(--border); border-radius:7px; margin:12px 0; overflow:hidden; }
+  .dtv .kpi { flex:1; padding:8px 10px; border-right:1px solid var(--rule); }
+  .dtv .kpi:last-child { border-right:0; }
+  .dtv .kpi b { display:block; font-size:16px; font-weight:400; font-variant-numeric:tabular-nums; }
+  .dtv .kpi.c-rose b { color:var(--rose); } .dtv .kpi.c-amber b { color:var(--amber); }
+  .dtv .kpi span { font-size:9.5px; color:var(--faint); }
+  .dtv .secthead { display:flex; justify-content:space-between; align-items:baseline; margin:12px 0 2px; }
+  .dtv .secthead .t { font-size:12px; font-weight:500; color:#e2e3e5; }
+  .dtv .secthead .r { font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .dtv .lrow { display:flex; justify-content:space-between; height:30px; align-items:center; border-top:1px solid var(--rule); font-size:11px; }
+  .dtv .lrow .nm { color:#c9cacd; font-family:"JetBrains Mono",Menlo,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dtv .lrow .ref { color:var(--faint); font-size:10px; font-variant-numeric:tabular-nums; }
+  .dtv .lrow .hop2 { color:var(--amber); }
+  .dtv .lrow .hop1 { color:var(--rose); }
+</style>
+
+<div class="mockup">
+  <div class="mockup-header">Cartograph — Dependency Map · data-terminal · selected: src/lib/db/supabase.ts</div>
+  <div class="mockup-body" style="padding:0">
+    <div class="dtv">
+
+      <div class="rail">
+        <svg class="fork" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.2"/><circle cx="18" cy="19" r="2.2"/><circle cx="18" cy="5" r="2.2"/><path d="M6 7.2v2.3a5 5 0 0 0 5 5h4.8M18 16.8v-9.3"/></svg>
+        <div class="rbutton on r"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="8" rx="1.5"/><rect x="14" y="12" width="7" height="8" rx="1.5"/><path d="M7 12v6h7"/></svg></div>
+        <div class="rbutton r"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.4-3.2 7.6-8 9-4.8-1.4-8-4.6-8-9V6z"/></svg></div>
+        <div class="rbutton r"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M9 12h6M9 16h4"/></svg></div>
+        <div class="rbutton tail r"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M7 7L5.5 5.5M18.5 18.5L17 17M17 7l1.5-1.5M5.5 18.5L7 17"/></svg></div>
+      </div>
+
+      <div class="top">
+        <div class="bar">
+          <span class="name">Cartograph</span>
+          <span class="stamp">cartograph-nextjs-saas · scanned today</span>
+          <span class="grow"></span>
+          <span class="kbd mono">⌘K command</span>
+          <span class="ghost mono">+ Add file</span>
+          <span class="ghost mono">Export JSON</span>
+          <span class="primary">Open Folder</span>
+        </div>
+
+        <div class="main">
+          <div class="files">
+            <div class="fsearch">⌕ <input value="" placeholder="Filter files, symbols… (⌘P)"></div>
+            <div class="fsort"><span class="on">Blast radius</span><span>Folder tree</span></div>
+            <div class="fhead"><span>16 files · 29 edges</span></div>
+            <div class="frow on mono"><span class="nm" style="color:#fff">db/supabase.ts</span><span class="impact">11</span></div>
+            <div class="frow hot mono"><span class="nm">auth-guard.ts</span><span class="impact">1</span></div>
+            <div class="frow hot mono"><span class="nm">billing.ts</span><span class="impact">4</span></div>
+            <div class="frow mono"><span class="nm">billing-webhook.ts</span><span class="impact">2</span></div>
+            <div class="frow mono"><span class="nm">ui/CheckoutPage.tsx</span><span class="impact">2</span></div>
+            <div class="frow mono"><span class="nm">ui/SessionList.tsx</span><span class="impact">1</span></div>
+            <div class="fgroup">src/agents</div>
+            <div class="frow mono"><span class="nm">graph-walker.ts</span><span class="impact">—</span></div>
+          </div>
+
+          <div class="canvas">
+            <div class="edge" style="left:13%;top:52%;width:15%;transform:rotate(10deg)"></div>
+            <div class="edge r1" style="left:13%;top:56%;width:17%;transform:rotate(-14deg)"></div>
+            <div class="edge r1" style="left:39%;top:34%;width:14%;transform:rotate(3deg)"></div>
+            <div class="edge r2" style="left:55%;top:36%;width:15%;transform:rotate(20deg)"></div>
+            <div class="edge r2" style="left:55%;top:44%;width:15%;transform:rotate(-16deg)"></div>
+            <div class="edge" style="left:39%;top:62%;width:14%;transform:rotate(-21deg)"></div>
+            <div class="edge" style="left:70%;top:70%;width:14%;transform:rotate(14deg)"></div>
+
+            <div class="node sel" style="left:5%;top:47%"><div class="l">db/supabase</div><div class="m">exports 3 · 1-hop 5</div></div>
+            <div class="node r1" style="left:38%;top:30%"><div class="l">billing.ts</div><div class="m">imports db · 1-hop 4</div></div>
+            <div class="node r1" style="left:38%;top:52%"><div class="l">auth-guard</div><div class="m">imports db</div></div>
+            <div class="node r2" style="left:70%;top:31%"><div class="l">ui/Checkout</div><div class="m">webhook → billing</div></div>
+            <div class="node r2" style="left:70%;top:56%"><div class="l">SessionList</div><div class="m">imports auth-guard</div></div>
+            <div class="node gy" style="left:38%;top:74%"><div class="l">graph-walker</div><div class="m">no dependents</div></div>
+            <div class="node gy" style="left:73%;top:80%"><div class="l">evals/suite</div><div class="m">leaf</div></div>
+
+            <div class="cbtn row"><span class="mono">Fit</span><span class="mono">Zoom</span><span class="mono">Isolate</span><span class="mono">Simulate</span></div>
+          </div>
+
+          <div class="insp">
+            <div class="itabs"><span class="on">Impact</span><span>Ask · Trace</span></div>
+            <div class="ibody">
+              <div class="ipath">src/lib/db/supabase.ts</div>
+              <div class="big">11<small> / 16 files</small></div>
+              <div class="biglab">in the 2-level blast radius (68.8%)</div>
+              <div class="kpistrip">
+                <div class="kpi c-rose"><b>5</b><span>direct breaks</span></div>
+                <div class="kpi c-amber"><b>6</b><span>2-hop cascade</span></div>
+                <div class="kpi"><b>1</b><span>outbound dep</span></div>
+              </div>
+              <div class="secthead"><span class="t">Breaks at 1 hop</span><span class="r">imports here</span></div>
+              <div class="lrow mono"><span class="nm">middleware/auth-guard.ts</span><span class="ref hop1">line 4</span></div>
+              <div class="lrow mono"><span class="nm">services/billing.ts</span><span class="ref hop1">line 2</span></div>
+              <div class="lrow mono"><span class="nm">agents/users.ts</span><span class="ref hop1">line 7</span></div>
+              <div class="secthead"><span class="t">Cascades at 2 hops</span><span class="r">via the 1-hop files</span></div>
+              <div class="lrow mono"><span class="nm">ui/CheckoutPage.tsx</span><span class="ref hop2">via billing</span></div>
+              <div class="lrow mono"><span class="nm">ui/SessionList.tsx</span><span class="ref hop2">via auth-guard</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status mono">
+          <span>16 files</span><span>29 edges</span><span>0 cycles</span>
+          <span>hotspot <span class="hot">src/lib/db/supabase.ts · 11</span></span>
+          <span class="grow"></span>
+          <span class="zoom"><span>−</span><span>100%</span><span>+</span><span>Fit</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>What this version settles</h3>
+  <div class="options">
+    <div class="option"><div class="letter">a</div><div class="content"><h3>Inspector = one file's story</h3><p>Path → the blast radius number as the biggest type → a hairline-split 3-figure strip (direct / cascade / outbound) → break lists with exact import lines. "Ask · Trace" becomes its quiet second tab — the agent stops shouting but stays one click away.</p></div></div>
+    <div class="option"><div class="letter">b</div><div class="content"><h3>Selection = one 1px line, everywhere</h3><p>Active rail item, selected file row, inspector tab, sort toggle: the same rule — a 1px blue line exactly as wide as the label. No fills, no pills, no colour on chrome. Rose/amber now live only on graph nodes, edges and counts — the data.</p></div></div>
+    <div class="option"><div class="letter">c</div><div class="content"><h3>Everything crammed is gone or demoted</h3><p>Metrics strip → status bar. Layer pills + sort + layout switcher → ⌘K / tiny canvas row. Legend → folds into the selection; glass panels, badges, gradients, taglines: deleted. "Simulate break" survives as a plain text control in the canvas corner.</p></div></div>
+    <div class="option"><div class="letter">d</div><div class="content"><h3>Evals + Docs</h3><p>They move off the top bar into the rail's second and third slots — full-pane views with the same quietness, opening on their own screen with the title row and one primary action.</p></div></div>
+  </div>
+</div>

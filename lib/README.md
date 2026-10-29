@@ -182,7 +182,7 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | --- | --- |
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
 | `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
-| `cartograph-evals.js` | DOM-free eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
+| `cartograph-evals.js` | DOM-free complete suite runner (`evaluateSuite`) and eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
 | `cartograph-fit.js` | DOM-free fit-camera math (`computeFitCamera`): pure UMD like the parser — browser global `CartographFit`, Node `module.exports` — used by `app/cartograph-graph-state.js` to frame the graph inside the canvas; covered by `test/fit.test.js` (fit-camera contract below) |
 | `README.md` | This guide |
 
@@ -193,6 +193,7 @@ Eval scorer contract for `cartograph-evals.js` (all exports are DOM-free):
 | `buildBenchmarkCases(graph)` | Derives benchmark cases (question, expected files, naive decoys) from graph metrics — no hand-written ground truth |
 | `collectTraceFiles(plan)` | Unions every trace step's `files` in order, deduped — the provenance set |
 | `scoreCase({ graph, citedFiles, expectedFiles, traceFiles, requireProvenance })` | Returns `{ citedFiles, hallucinatedPaths, unprovenPaths, groundedCount, totalCited, recalledCount, totalExpected, groundednessScore, recallScore, passed }`. Hallucinated = cited path missing from the graph; unproven = cited, in-graph, but absent from `traceFiles` when `requireProvenance` is true; groundedness% = grounded / cited (0 cited → 100); recall% = \|expected ∩ cited\| / \|expected\| (0 expected → 100); `passed` = 0 hallucinated ∧ 0 unproven ∧ recall exactly 100 |
+| `evaluateSuite(graph, mode, chipFormatter)` | Complete `{isStrict,cases,entries,summary}` run. Strict executes actual plans and scores trace provenance; naive skips planner and scores existence only. Accepts only `strict`/`naive`, rejecting other modes before graph access. Empty graph returns empty cases and 100% empty aggregate scores, zero steps. Caller supplies a safe HTML chip formatter; citations are scored from paths, never HTML. Deterministic and does not mutate graph. |
 | `computeSuiteSummary(perCase, plans)` | Aggregates overall groundedness/recall percentages and a 1-decimal average step count |
 
 Fit-camera contract for `cartograph-fit.js` (DOM-free, Node-testable):
@@ -204,3 +205,13 @@ Fit-camera contract for `cartograph-fit.js` (DOM-free, Node-testable):
 Architectural rules that constrain this module live in
 [`../PROJECT.md`](../PROJECT.md) and [`../CLAUDE.md`](../CLAUDE.md). Phase
 requirements are in [`../specs/phase-01-parser.md`](../specs/phase-01-parser.md).
+
+## Repository intake policy
+
+`cartograph-intake.js` is a DOM-free classic/CommonJS module exposing
+`checkDirectory(path)` and `checkFile(path, byteLength)`. Both return
+`{ include, reason, skippedPath }`; reasons are `hidden`, `excluded-directory`,
+`unsupported`, or `too-large`. Paths are repository-relative, separators are
+normalized, exclusions match whole segments, and 500,000 bytes is included.
+Readers own root stripping, I/O, duplicate/unreadable reporting and snapshots.
+Snapshots bypass this policy. See the root README for the fixed intake scope.
