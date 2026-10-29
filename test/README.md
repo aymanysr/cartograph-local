@@ -33,7 +33,7 @@ that naming pattern.
 
 ## Coverage
 
-101 tests across nine files, grouped by the behavior they lock down.
+105 tests across ten files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 
@@ -195,6 +195,7 @@ test('resolves a new edge case', () => {
 | `agent.test.js` | Agent tool registry, router/executor, routing, grounding, purity, synthesis-validation, and cross-surface tool-name consistency tests (27 cases) |
 | `evals.test.js` | Eval provenance scoring and benchmark-case and complete execution tests (14 cases) |
 | `fit.test.js` | Fit-camera framing tests for `lib/cartograph-fit.js` (5 cases) |
+| `layouts.test.js` | Layout engine determinism, cycle rank safety, directory extraction, and multi-scale preset collision-free contracts (4 cases) |
 | `ui.test.js` | Actual-script VM geometry, edge roles, force-layout separation and palette contracts (9 cases) |
 | `README.md` | This guide |
 

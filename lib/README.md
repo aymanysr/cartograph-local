@@ -1,7 +1,7 @@
 # `lib/` — Shared Deterministic Modules
 
-`lib/` holds the four shared deterministic modules — parser, agent tool
-executor, eval scorer, and fit-camera — loaded unchanged by the browser app
+`lib/` holds the five shared deterministic modules — parser, agent tool
+executor, eval scorer, fit-camera, and layouts — loaded unchanged by the browser app
 (`cartograph.html`), the CLI (`cli/cartograph-scan.mjs`), and the tests.
 There is no bundler, no dependency, no network call, and no LLM involvement in
 graph construction. `lib/cartograph-parser.js` is the single source of
@@ -184,6 +184,7 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
 | `cartograph-evals.js` | DOM-free complete suite runner (`evaluateSuite`) and eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
 | `cartograph-fit.js` | DOM-free fit-camera math (`computeFitCamera`): pure UMD like the parser — browser global `CartographFit`, Node `module.exports` — used by `app/cartograph-graph-state.js` to frame the graph inside the canvas; covered by `test/fit.test.js` (fit-camera contract below) |
+| `cartograph-layouts.js` | Pure mathematical layout engine (`computeTopologicalLR`, `computeTopologicalTB`, `computeDirectoryClusterBox`, `findBackEdges`, `computeTopologicalRanks`, `getEffectiveDirectory`, `separateNodeCards`): pure UMD — browser global `CartographLayouts`, Node `module.exports` — provides deterministic DAG layering and rigid AABB minimum-penetration separation for zero-card collisions; covered by `test/layouts.test.js` |
 | `README.md` | This guide |
 
 Eval scorer contract for `cartograph-evals.js` (all exports are DOM-free):

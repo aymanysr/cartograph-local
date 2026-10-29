@@ -1,0 +1,77 @@
+# CONTEXT.md — Cartograph Local Architecture & Decisions
+
+## Domain & Core Purpose
+Cartograph Local is a deterministic codebase intelligence tool. Every edge, cycle, and blast radius calculation is computed from real parsed code imports—never guessed or summarized by an LLM.
+
+## Active Initiative: Graph Layout Redesign
+
+### Motivation
+The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from two fundamental flaws:
+1. **DAG Mode is a pseudo-DAG**: It groups nodes into 5 static layer-bucket rows (`rankBuckets 0..4`) based on regex rules rather than actual topological dependency depth. Layers with many files stretch into excessively wide horizontal rows with overlapping edge crossings.
+2. **Force Mode is collision-unaware**: It treats 192x48 rectangular cards as point masses in a 2D Coulomb-Hooke simulation, resulting in overlapping rectangular nodes and tangled card clumps.
+
+### Proposed Architecture: Dual Optimized Modes
+1. **Topological Hierarchy (Dependency Flow)**:
+   - Real topological sorting (longest path from entry roots or dependency depth).
+   - Card-aware horizontal or vertical layout with edge crossing minimization.
+2. **Community Cluster (Architectural Map)**:
+   - Force simulation with rectangular bounding-box collision detection (`AABB` push-apart).
+   - Folder/directory-based gravitational clustering to group related modules in readable visual neighborhoods.
+
+### Log of Architectural Decisions (ADRs)
+
+#### ADR-001: Graph Layout Engine Redesign
+- **Status:** Accepted & Prototyped (2026-10-29)
+- **Decisions:**
+  1. **Dual-Direction Topological Hierarchy (DAG)**:
+     - Compute real topological dependency ranks based on longest path from entry nodes (or depth from leaf modules).
+     - Support both **Left-to-Right (`lr`)** (horizontal pipeline, optimal for widescreen 16:9 monitors and 192×48 text cards) and **Top-to-Bottom (`tb`)** (classic downward tree hierarchy).
+  2. **Community Directory Clustering with Rigid Box Collision (Cluster)**:
+     - Group nodes by filesystem directory (`app/`, `lib/`, `test/`, etc.) with soft cluster centroids/attractors and edge springs.
+     - Enforce rigid Axis-Aligned Bounding Box (AABB) separation so 192×48 rectangular cards cannot overlap under any circumstances.
+  3. **Visual Prototype Detour**:
+     - Followed the `/prototype` pattern (Sub-shape A: on the existing canvas page via `?variant=` and a floating prototype switcher) to visually verify card spacing, edge routing, and viewport fit.
+
+#### ADR-002: EGM Review Outcome & Layout Engine Seam
+- **Status:** Implemented (2026-10-29)
+- **EGM Review Findings Remediated:**
+  1. **Architecture Seam**: Extracted pure mathematical layout algorithms into [`lib/cartograph-layouts.js`](lib/cartograph-layouts.js) (zero-dependency UMD module), separating math from DOM controller `app/cartograph-prototype-layouts.js`.
+  2. **Cycle Safety**: Implemented DFS back-edge filtering in `computeTopologicalRanks` to eliminate rank inflation/explosion on cyclic imports.
+  3. **AABB 2D Collision Fix**: Replaced naive coordinate diff with dimensional normalization `(px / 216) <= (py / 68)`, ensuring collisions resolve along the true axis of minimum penetration.
+  4. **Directory Extraction**: Added `getEffectiveDirectory()` to strip root `src/` prefixes, correctly resolving Next.js and nested projects into distinct visual neighborhoods (`app`, `lib`, `test`, `cli`).
+  5. **Barycenter Crossing Minimization**: Implemented multi-pass (forward + backward + forward) sweeps with deterministic Rank 0 tie-breaking.
+  6. **Automated Verification**: Added [`test/layouts.test.js`](test/layouts.test.js) (4 new tests; 105/105 suite pass) proving determinism, cycle safety, and zero card overlaps across all preset repos.
+
+#### ADR-003: Production Layout Toggling & Canvas Visual Wayfinding
+- **Status:** Implemented (2026-10-29)
+- **Decisions:**
+  1. **Seamless In-App Toggle**:
+     - Added `#btnToggleLayout` directly to `#canvasToolbar` cycling through `Pipeline (LR)`, `Tree (TB)`, and `Cluster`.
+     - Integrated `CartographLayouts` directly into `app/cartograph-graph-state.js` and registered routes in Command Palette (`⌘K`).
+  2. **Canvas Wayfinding Upgrades to Eliminate Disorientation**:
+     - **Spatial Dot Grid**: Subtle 36px world-space dot grid (`#202024`) anchors panning, zooming, and scale.
+     - **Card Layer Accent Bars**: Color-coded 3.5px vertical left borders for architectural layers allowing instant recognition.
+     - **Interactive Hover Flashlight**: Hovering over any file highlights all its incoming callers (crimson/rose) and outgoing dependencies (sky cyan) with smooth cubic Bézier curves, while gently dimming unrelated files.
+     - **Stage Headers in Pipeline Mode**: Subtle column headers (`ENTRY POINTS`, `STAGE 1`, `FOUNDATION & DB`) clarify caller-callee flow.
+     - **Directory Watermark Hulls in Cluster Mode**: Soft translucent rounded containers labeled `📁 app/`, `📁 lib/`, `📁 test/` make folder neighborhoods immediately visible.
+
+#### ADR-004: Formal EGM Review Audit & Full Production Remediation
+- **Status:** Implemented (2026-10-29)
+- **Reviewers:** Parallel fresh-context subagents (Design Critic `fa4e508d` & Structural Critic `642be472`).
+- **Reports:** Preserved in [`docs/superpowers/reviews/2026-10-29-layout-redesign/`](docs/superpowers/reviews/2026-10-29-layout-redesign/).
+- **Key Remediations:**
+  1. **D1 (Sticky Hover Leak)**: Added `canvas.mouseleave` and outside-canvas mousemove clearing to ensure flashlight dimming reliably deactivates.
+  2. **D2 (WCAG Contrast)**: Raised stage headers to `#94a3b8` (5.8:1), subtitles to `#a1a1aa` (7.0:1), and default edges to `#3f3f46` (3.1:1).
+  3. **D3 / S1 (Bézier Geometry & Arrival Tangents)**: Branched curve routing per mode (horizontal for LR, vertical for TB, linear for Cluster) and calculated true arrival tangent angle atan2(dy, dx) for arrowhead orientation.
+  4. **D5 (Stage Guides)**: Grouped guides strictly by topological integer rank (`n.rank`) rather than mutable screen coordinates.
+  5. **D6 / D9 (Accessibility & Keyboard)**: Added `role="region" aria-label="..."` on canvas, `aria-live="polite"` on the layout toggle button, and global keyboard shortcuts (Arrow keys pan, `+`/`-` zoom, `f`/`0` fit).
+  6. **D7 / S3 (Performance & GC Pressure)**: Batched the dot grid into a single path call and cached `nodeMap` and `basenameCount` on `state.graph`.
+  7. **D8 (Basename Ambiguity)**: Disambiguated duplicate basenames with parent folder prefixes.
+  8. **D10 (Palette Separation)**: Re-assigned DB & Core layer color to Indigo (`#6366f1`), reserving Cyan (`#38bdf8`) exclusively for interactive outbound hover links.
+  9. **S2 (Command Palette)**: Synchronized `⌘K` palette with `dag-lr`, `dag-tb`, and `cluster`.
+  10. **S6 (Documentation Alignment)**: Updated [`lib/README.md`](lib/README.md) (5 shared modules) and [`test/README.md`](test/README.md) (105 tests across 10 suites).
+- **Verification:** 105/105 tests passing, zero card overlaps across all preset topologies, and verified live in Orca browser.
+
+
+
+

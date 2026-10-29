@@ -732,7 +732,8 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       const map = run => () => { switchMainView('explorer'); if (window.innerWidth <= 640) setPhonePane('map'); run(); };
       [['explorer','Map'],['evals','Evals'],['specs','Docs']].forEach(([view,label]) => add('view-'+view,'Open '+label,()=>switchMainView(view)));
       [['all','All'],['core','DB & Core'],['parser','Parser'],['agent','Agent'],['api','Routes'],['ui','UI']].forEach(([layer,label]) => add('layer-'+layer,'Layer: '+label+(state.layerFilter===layer?' (current)':''),map(()=>setLayerFilter(layer))));
-      ['dag','force'].forEach(layout=>add('layout-'+layout,'Layout: '+(layout==='dag'?'Dependency':'Force')+(state.graphLayout===layout?' (current)':''),map(()=>setGraphLayout(layout)),hasNodes,'Load files to change layout'));
+      const isCurLayout = mode => (mode === 'dag-lr' && (state.graphLayout === 'dag' || state.graphLayout === 'dag-lr')) || (mode === 'dag-tb' && state.graphLayout === 'dag-tb') || (mode === 'cluster' && (state.graphLayout === 'force' || state.graphLayout === 'cluster'));
+      [['dag-lr','Pipeline (Left-to-Right)'],['dag-tb','Tree (Top-to-Bottom)'],['cluster','Directory Clusters']].forEach(([layout,label]) => add('layout-'+layout,'Layout: '+label+(isCurLayout(layout)?' (current)':''),map(()=>setGraphLayout(layout)),hasNodes,'Load files to change layout'));
       add('isolate','Isolate impact ('+(state.isolateBlastRadius?'on':'off')+')',map(toggleIsolateBlastRadius),selected,'Select a file first');
       add('simulate','Simulate breaking change ('+(state.simulateBreakingChange?'on':'off')+')',map(toggleBreakSimulation),selected,'Select a file first');
       add('highest-impact','Go to highest-impact file',selectTopHotspot,hasNodes,'Load files to find the highest-impact file');

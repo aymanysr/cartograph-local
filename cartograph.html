@@ -11,6 +11,7 @@
   <script src="lib/cartograph-agent.js"></script>
   <script src="lib/cartograph-evals.js"></script>
   <script src="lib/cartograph-fit.js"></script>
+  <script src="lib/cartograph-layouts.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -157,7 +158,7 @@
     <!-- CENTER PANEL: Interactive Dependency Graph Canvas -->
     <section id="mapRegion" class="flex-1 flex flex-col relative bg-slate-950 min-h-[380px] lg:min-h-0 overflow-hidden">
 
-      <div id="canvasToolbar"><button onclick="resetGraphView()">Fit</button><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button id="btnToggleIsolate" aria-pressed="false" onclick="toggleIsolateBlastRadius()">Isolate</button><button id="btnSimulateBreak" aria-pressed="false" onclick="toggleBreakSimulation()">Simulate</button><button id="toggleInspectorBtn" onclick="toggleInspector()">Hide inspector</button><button id="layoutBtnDag" hidden></button><button id="layoutBtnForce" hidden></button></div>
+      <div id="canvasToolbar"><button onclick="resetGraphView()">Fit</button><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button id="btnToggleLayout" onclick="cycleGraphLayout()" title="Cycle layout (Pipeline LR / Tree TB / Cluster)" aria-label="Cycle layout mode (Pipeline LR, Tree TB, Cluster)" aria-live="polite">Pipeline</button><button id="btnToggleIsolate" aria-pressed="false" onclick="toggleIsolateBlastRadius()">Isolate</button><button id="btnSimulateBreak" aria-pressed="false" onclick="toggleBreakSimulation()">Simulate</button><button id="toggleInspectorBtn" onclick="toggleInspector()">Hide inspector</button><button id="layoutBtnDag" hidden></button><button id="layoutBtnForce" hidden></button></div>
       <div id="canvasAlertBanner" class="hidden absolute top-16 left-3 right-3 z-20 pointer-events-none flex justify-center">
         <div id="canvasAlertContent" class="simulation-notice pointer-events-auto">
           <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 shrink-0"></i>
@@ -170,7 +171,7 @@
 
       <div id="graphCanvasContainer" class="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing">
         <p id="mapEmptyState" hidden style="position:absolute;inset:45% 16px auto;text-align:center;color:var(--muted);font-size:13px">Open a folder or drop a repository snapshot to explore its files.</p>
-        <canvas id="dependencyCanvas" class="w-full h-full block"></canvas>
+        <canvas id="dependencyCanvas" role="region" aria-label="Interactive Architecture Dependency Graph" class="w-full h-full block"></canvas>
       </div>
 
     </section>

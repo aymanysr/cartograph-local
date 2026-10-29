@@ -49,7 +49,7 @@
 
     function getLayerMeta(layer) {
       const map = {
-        core:   { label: 'DB & Core',     color: '#38BDF8', bg: 'rgba(56, 189, 248, 0.15)', rank: 4 },
+        core:   { label: 'DB & Core',     color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', rank: 4 },
         parser: { label: 'Parser Engine', color: '#bdbdc0', bg: 'rgba(189, 189, 192, 0.15)', rank: 3 },
         agent:  { label: 'Agent & Evals', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', rank: 2 },
         api:    { label: 'API & Auth',    color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', rank: 1 },
@@ -130,6 +130,18 @@
       const nodes = state.graph.nodes;
       const edges = state.graph.edges;
       if (!nodes.length) return;
+
+      if (typeof CartographLayouts !== 'undefined') {
+        if (state.graphLayout === 'dag-tb') {
+          CartographLayouts.computeTopologicalTB(nodes, edges);
+        } else if (state.graphLayout === 'force' || state.graphLayout === 'cluster') {
+          CartographLayouts.computeDirectoryClusterBox(nodes, edges);
+        } else {
+          CartographLayouts.computeTopologicalLR(nodes, edges);
+        }
+        fitGraphToCanvas();
+        return;
+      }
 
       const canvas = document.getElementById('dependencyCanvas');
       const width = (canvas && canvas.clientWidth) ? canvas.clientWidth : 860;

@@ -5,7 +5,7 @@ const vm = require('node:vm');
 function harness() {
   const canvas = { clientWidth: 860, clientHeight: 600 };
   const context = vm.createContext({ console, setTimeout, clearTimeout, window: {addEventListener(){}}, document: {getElementById(id){return id === 'dependencyCanvas' ? canvas : null;}} });
-  for (const file of ['lib/cartograph-intake.js','lib/cartograph-parser.js','lib/cartograph-agent.js','lib/cartograph-evals.js','lib/cartograph-fit.js','app/cartograph-preset-repos.js','app/cartograph-graph-state.js','app/cartograph-canvas-render.js','app/cartograph-ui-panels.js','app/cartograph-agent-evals.js','app/cartograph-app-shell.js']) vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
+  for (const file of ['lib/cartograph-intake.js','lib/cartograph-parser.js','lib/cartograph-agent.js','lib/cartograph-evals.js','lib/cartograph-fit.js','lib/cartograph-layouts.js','app/cartograph-preset-repos.js','app/cartograph-graph-state.js','app/cartograph-canvas-render.js','app/cartograph-ui-panels.js','app/cartograph-agent-evals.js','app/cartograph-app-shell.js']) vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
   return source => vm.runInContext(source,context);
 }
 test('card bounds include the full centered card',()=>{const run=harness();assert.deepEqual(JSON.parse(run('JSON.stringify(getGraphNodeBounds({x:0,y:0}))')),{minX:-96,minY:-24,maxX:96,maxY:24});});
