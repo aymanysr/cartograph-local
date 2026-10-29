@@ -391,12 +391,10 @@
 
       function screenToWorld(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
-        const sx = clientX - rect.left;
-        const sy = clientY - rect.top;
-        return {
-          x: (sx - state.camera.x) / state.camera.zoom,
-          y: (sy - state.camera.y) / state.camera.zoom
-        };
+        return CartographCamera.toWorld(state.camera, {
+          x: clientX - rect.left,
+          y: clientY - rect.top,
+        });
       }
 
       function findNodeAt(wx, wy) {
@@ -471,10 +469,10 @@
           if (!isMapActive) return;
           e.preventDefault();
           const panStep = 50;
-          if (e.key === 'ArrowLeft') state.camera.x += panStep;
-          else if (e.key === 'ArrowRight') state.camera.x -= panStep;
-          else if (e.key === 'ArrowUp') state.camera.y += panStep;
-          else if (e.key === 'ArrowDown') state.camera.y -= panStep;
+          if (e.key === 'ArrowLeft') state.camera = CartographCamera.panBy(state.camera, panStep, 0);
+          else if (e.key === 'ArrowRight') state.camera = CartographCamera.panBy(state.camera, -panStep, 0);
+          else if (e.key === 'ArrowUp') state.camera = CartographCamera.panBy(state.camera, 0, panStep);
+          else if (e.key === 'ArrowDown') state.camera = CartographCamera.panBy(state.camera, 0, -panStep);
           else if (e.key === '+' || e.key === '=') zoomGraph(1.15);
           else if (e.key === '-' || e.key === '_') zoomGraph(0.85);
           else if (e.key === '0' || e.key === 'f' || e.key === 'F') resetGraphView();
@@ -487,11 +485,7 @@
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-
-        const newZoom = Math.min(2.6, Math.max(0.4, state.camera.zoom * factor));
-        state.camera.x = mx - (mx - state.camera.x) * (newZoom / state.camera.zoom);
-        state.camera.y = my - (my - state.camera.y) * (newZoom / state.camera.zoom);
-        state.camera.zoom = newZoom;
+        state.camera = CartographCamera.zoomAt(state.camera, { x: mx, y: my }, factor);
       }, { passive: false });
     }
 
@@ -499,10 +493,7 @@
       const canvas = document.getElementById('dependencyCanvas');
       const cx = canvas ? canvas.clientWidth / 2 : 400;
       const cy = canvas ? canvas.clientHeight / 2 : 300;
-      const newZoom = Math.min(2.6, Math.max(0.4, state.camera.zoom * factor));
-      state.camera.x = cx - (cx - state.camera.x) * (newZoom / state.camera.zoom);
-      state.camera.y = cy - (cy - state.camera.y) * (newZoom / state.camera.zoom);
-      state.camera.zoom = newZoom;
+      state.camera = CartographCamera.zoomAt(state.camera, { x: cx, y: cy }, factor);
     }
 
     function resetGraphView() {

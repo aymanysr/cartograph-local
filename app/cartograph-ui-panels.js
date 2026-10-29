@@ -63,12 +63,13 @@
       }
 
       if (panToNode) {
-        const canvas = document.getElementById('dependencyCanvas');
-        if (canvas) {
-          const cx = canvas.clientWidth / 2;
-          const cy = canvas.clientHeight / 2;
-          state.camera.x = cx - exists.x * state.camera.zoom;
-          state.camera.y = cy - exists.y * state.camera.zoom;
+        if (typeof CartographNavigation !== 'undefined' && CartographNavigation.centerOnNode) {
+          CartographNavigation.centerOnNode(filePath);
+        } else {
+          const canvas = document.getElementById('dependencyCanvas');
+          if (canvas) {
+            state.camera = CartographCamera.centerOnNode(state.camera, exists, canvas.clientWidth, canvas.clientHeight);
+          }
         }
       }
 

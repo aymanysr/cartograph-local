@@ -155,3 +155,80 @@ test('CartographIntake detectSharedRoot accurately identifies single root vs mix
   const empty = intake.detectSharedRoot([]);
   assert.equal(empty.sharedRoot, false);
 });
+
+const CartographIntake = require('../lib/cartograph-intake.js');
+
+test('CartographIntake processBatch correctly processes and summarizes a batch of files', () => {
+  const entries = [
+    { path: 'repo/src/index.ts', size: 120, content: 'export * from "./lib";' },
+    { path: 'repo/src/lib.ts', size: 240, content: 'export const x = 1;' },
+    { path: 'repo/node_modules/pkg/index.js', size: 500, content: '' },
+    { path: 'repo/.git/HEAD', size: 20, content: '' },
+    { path: 'repo/assets/image.png', size: 1000, content: '' },
+    { path: 'repo/src/index.ts', size: 120, content: 'duplicate' },
+  ];
+
+  const result = CartographIntake.processBatch(entries);
+  assert.equal(result.sharedRoot, true);
+  assert.equal(result.rootFolder, 'repo');
+  assert.equal(result.included.length, 2);
+  assert.equal(result.included[0].path, 'src/index.ts');
+  assert.equal(result.included[1].path, 'src/lib.ts');
+  assert.equal(result.summary.includedCount, 2);
+  assert.ok(result.summary.skippedCount >= 3);
+  assert.equal(result.summary.countsByReason['excluded-directory'], 1);
+  assert.equal(result.summary.countsByReason['hidden'], 1);
+  assert.equal(result.summary.countsByReason['unsupported'], 1);
+  assert.equal(result.summary.countsByReason['duplicate'], 1);
+});
+
+test('CartographIntake processBatch identifies single-file JSON snapshots', () => {
+  const snapshotData = {
+    graph: {
+      nodes: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }],
+      edges: [{ source: 'src/a.ts', target: 'src/b.ts' }],
+    },
+    name: 'snapshot-repo',
+  };
+  const entries = [
+    { path: 'snapshot-repo.json', size: 500, content: JSON.stringify(snapshotData) },
+  ];
+
+  const result = CartographIntake.processBatch(entries);
+  assert.ok(result.snapshot);
+  assert.equal(result.snapshot.type, 'graph');
+  assert.equal(result.snapshot.count, 2);
+  assert.equal(result.rootFolder, 'snapshot-repo');
+});
+
+test('CartographIntake processBatch respects options.maxBytes', () => {
+  const entries = [
+    { path: 'repo/src/small.ts', size: 100, content: 'export const a = 1;' },
+    { path: 'repo/src/large.ts', size: 2000, content: 'export const b = 2;' },
+  ];
+  const result = CartographIntake.processBatch(entries, { maxBytes: 1000 });
+  assert.equal(result.included.length, 1);
+  assert.equal(result.included[0].path, 'src/small.ts');
+  assert.equal(result.summary.countsByReason['too-large'], 1);
+});
+
+test('CartographIntake discriminate classifies snapshots and returns typed metadata', () => {
+  const graphSnap = {
+    name: 'sample-graph',
+    graph: { nodes: [{ path: 'a.ts' }], edges: [] },
+  };
+  const resultObj = CartographIntake.discriminate(graphSnap);
+  assert.ok(resultObj);
+  assert.equal(resultObj.isSnapshot, true);
+  assert.equal(resultObj.type, 'graph');
+  assert.equal(resultObj.count, 1);
+
+  const resultStr = CartographIntake.discriminate(JSON.stringify(graphSnap));
+  assert.ok(resultStr);
+  assert.equal(resultStr.isSnapshot, true);
+  assert.equal(resultStr.type, 'graph');
+
+  assert.equal(CartographIntake.discriminate(null), null);
+  assert.equal(CartographIntake.discriminate('{ invalid json'), null);
+  assert.equal(CartographIntake.discriminate({ not: 'a snapshot' }), null);
+});

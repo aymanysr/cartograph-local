@@ -663,3 +663,40 @@ test('queryAgent executes deterministic planning and model synthesis validation'
   assert.equal(rejectedResult.rejected, true);
   assert.ok(rejectedResult.rejectedPaths.includes('src/services/fake_auth.ts'));
 });
+
+test('buildAgentPlan and queryAgent return structured domain models without relying on HTML parsing or mock formatters', async () => {
+  const graph = buildFixtureGraph();
+
+  // Test structured plan without any formatter passed (verifying Spec line 205)
+  const plan = buildAgentPlan('Where is authentication enforced?', graph);
+  assert.equal(plan.question, 'Where is authentication enforced?');
+  assert.ok(plan.target, 'target must be populated on structured plan');
+  assert.equal(plan.target.path, VERIFY);
+  assert.ok(plan.blastRadius, 'blastRadius must be populated');
+  assert.deepEqual(plan.blastRadius.hop1Files, [ROUTES]);
+  assert.ok(plan.narrative, 'narrative must be populated');
+  assert.equal(plan.narrative.headline, `Authentication is enforced in ${VERIFY}`);
+
+  const queryResult = await queryAgent('Where is authentication enforced?', graph);
+  assert.equal(queryResult.question, 'Where is authentication enforced?');
+  assert.ok(queryResult.target);
+  assert.equal(queryResult.target.path, VERIFY);
+  assert.ok(queryResult.blastRadius);
+  assert.ok(queryResult.narrative);
+
+  // Cycle branch structured plan
+  const cyclePlan = buildAgentPlan('detect circular dependencies and bottlenecks', graph);
+  assert.equal(cyclePlan.question, 'detect circular dependencies and bottlenecks');
+  assert.ok(cyclePlan.target);
+  assert.ok(cyclePlan.blastRadius);
+  assert.ok(cyclePlan.narrative);
+  assert.ok(cyclePlan.narrative.headline);
+
+  // Generic walk structured plan for open questions
+  const genericPlan = buildAgentPlan('how does this codebase work', graph);
+  assert.equal(genericPlan.question, 'how does this codebase work');
+  assert.ok(genericPlan.target);
+  assert.ok(genericPlan.blastRadius);
+  assert.ok(genericPlan.narrative);
+  assert.ok(genericPlan.narrative.headline);
+});

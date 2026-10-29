@@ -53,8 +53,15 @@
 
       const stepsHtml = renderAgentTrace(plan);
       const cardId = 'agentRun_' + Date.now() + '_' + stream.children.length;
+      const narrativeBadge = plan.narrative && plan.narrative.headline
+        ? `<span class="agent-narrative-tag">${escapeHtml(plan.narrative.headline)}</span>`
+        : '';
       const cardHtml = `<article id="${cardId}" class="agent-run">
-        <header><strong>${escapeHtml(question)}</strong><span>${plan.steps.length} tool steps</span></header>
+        <header>
+          <strong>${escapeHtml(question)}</strong>
+          <span>${plan.steps.length} tool steps</span>
+          ${narrativeBadge}
+        </header>
         <div class="agent-trace"><h3>Tool trace</h3>${stepsHtml}</div>
         <section class="agent-answer"><h3>Answer</h3><div class="agent-synthesis-body">${plan.answerHtml}</div></section>
       </article>`;
@@ -67,6 +74,7 @@
         try {
           if (agentLib && typeof agentLib.queryAgent === 'function') {
             const outcome = await agentLib.queryAgent(question, graph, {
+              plan,
               chipFormatter: makeFileChipHtml,
               modelClient,
               config,

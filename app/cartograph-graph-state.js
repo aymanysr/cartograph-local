@@ -152,7 +152,7 @@
     }
 
     function getGraphNodeBounds(node) {
-      return { minX: node.x - 96, minY: node.y - 24, maxX: node.x + 96, maxY: node.y + 24 };
+      return CartographCamera.getNodeBounds(node);
     }
 
     function fitGraphToCanvas() {
@@ -162,9 +162,7 @@
         return false;
       }
       if (!state.graph.nodes.length) { state.camera = { x: 0, y: 0, zoom: 1 }; return true; }
-      const bounds = state.graph.nodes.map(getGraphNodeBounds);
-      const worldBox = {minX: Math.min(...bounds.map(b => b.minX)), minY: Math.min(...bounds.map(b => b.minY)), maxX: Math.max(...bounds.map(b => b.maxX)), maxY: Math.max(...bounds.map(b => b.maxY))};
-      state.camera = CartographFit.computeFitCamera(worldBox, canvas.clientWidth, canvas.clientHeight, {top:48,right:16,bottom:16,left:16});
+      state.camera = CartographCamera.fitToNodes(state.graph.nodes, canvas.clientWidth, canvas.clientHeight, { top: 48, right: 16, bottom: 16, left: 16 });
       state.ui.pendingFit = false;
       return true;
     }

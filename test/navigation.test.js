@@ -18,6 +18,7 @@ function harness(width=1440) {
  querySelectorAll(selector){return selector==='[data-filepath]'?[...elements.values()].flatMap(e=>e.children).filter(e=>e.isConnected&&e.dataset.filepath):[]},querySelector(){return null},
  addEventListener(type,fn,capture){(documentListeners[type]??=[]).push({fn,capture:!!capture})}};
  const c=vm.createContext({console,document,setTimeout,clearTimeout,queueMicrotask:()=>{},requestAnimationFrame:()=>{},ResizeObserver:class{observe(){}},window:{innerWidth:width,addEventListener(type,fn){(windowListeners[type]??=[]).push(fn)}}});
+ if(fs.existsSync('lib/cartograph-fit.js'))vm.runInContext(fs.readFileSync('lib/cartograph-fit.js','utf8'),c);
  for(const file of ['app/cartograph-graph-state.js','app/cartograph-canvas-render.js','app/cartograph-ui-panels.js','app/cartograph-app-shell.js'])vm.runInContext(fs.readFileSync(file,'utf8'),c,{filename:file});
  const run=source=>vm.runInContext(source,c);
  run(`globalThis.s=state;globalThis.selections=[];state.graph.nodes=[{path:'src/a.js',x:20,y:20}];state.camera={x:0,y:0,zoom:1};syncResponsiveShell=()=>{};switchMainView=(view)=>{state.activeView=view};selectFileNode=(p,pan)=>{selections.push([p,pan]);state.selectedFile=p};updateShellZoom=()=>{};initResponsiveShell();initFilePathDelegation();initCanvasInteractions();`);

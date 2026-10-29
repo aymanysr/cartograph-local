@@ -21,7 +21,7 @@ import CartographIntake from '../lib/cartograph-intake.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function walkDir(rootDir, skipped) {
-  const files = [], seen = new Set();
+  const session = CartographIntake.createIntakeSession();
   function walk(currentDir, relative = '') {
     let entries;
     try {
@@ -39,32 +39,39 @@ function walkDir(rootDir, skipped) {
       const filesystemRelative = relative ? `${relative}/${entry.name}` : entry.name;
       const relPath = filesystemRelative.replace(/\\/g, '/').split('/').filter(Boolean).join('/');
       if (entry.isSymbolicLink()) { skipped.push({ path: relPath, reason: 'symlink' }); continue; }
-      const decision = entry.isDirectory() ? CartographIntake.checkDirectory(relPath) : CartographIntake.checkFile(relPath, 0);
-      if (!decision.include) { skipped.push({ path: decision.skippedPath, reason: decision.reason }); continue; }
-      if (entry.isDirectory()) { walk(fullPath, filesystemRelative); continue; }
+      if (entry.isDirectory()) {
+        const dirDecision = CartographIntake.checkDirectory(relPath);
+        if (!dirDecision.include) { skipped.push({ path: dirDecision.skippedPath, reason: dirDecision.reason }); continue; }
+        walk(fullPath, filesystemRelative);
+        continue;
+      }
       if (!entry.isFile()) { skipped.push({ path: relPath, reason: 'unsupported' }); continue; }
-      if (seen.has(relPath)) { skipped.push({ path: relPath, reason: 'duplicate' }); continue; }
-      seen.add(relPath);
+
       let descriptor;
       try {
         // O_NOFOLLOW also rejects a file replaced by a symlink after readdir.
         descriptor = fs.openSync(fullPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
         const stat = fs.fstatSync(descriptor);
         if (!stat.isFile()) throw new Error('Not a regular file');
-        let decision = CartographIntake.checkFile(relPath, stat.size);
-        if (decision.include) {
+        const check = session.checkAndInclude(relPath, relPath, stat.size);
+        if (check.included) {
           const bytes = fs.readFileSync(descriptor);
-          decision = CartographIntake.checkFile(relPath, bytes.length);
-          if (decision.include) files.push({ path: relPath, content: bytes.toString('utf8') });
+          const postCheck = CartographIntake.checkFile(relPath, bytes.length);
+          if (postCheck.include) {
+            session.recordIncluded({ path: relPath, content: bytes.toString('utf8') });
+          } else {
+            session.recordSkipped(postCheck.skippedPath, postCheck.reason);
+          }
         }
-        if (!decision.include) skipped.push({ path: decision.skippedPath, reason: decision.reason });
       } catch {
         skipped.push({ path: relPath, reason: 'unreadable' });
       } finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
     }
   }
   walk(rootDir);
-  return files;
+  const summary = session.getSummary();
+  skipped.push(...summary.skipped);
+  return summary.included;
 }
 
 function printIntakeReport(files, skipped) {

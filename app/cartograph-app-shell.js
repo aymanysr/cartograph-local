@@ -180,73 +180,50 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       let singleText;
       if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.json')) {
         try { singleText = await fileList[0].text(); } catch (error) { /* Report via ordinary intake below. */ }
-        const snapshot = typeof CartographIntake !== 'undefined' && CartographIntake.parseSnapshot
-          ? CartographIntake.parseSnapshot(singleText)
-          : null;
-        if (snapshot && snapshot.type === 'graph') {
-          applyParsedGraph(snapshot.graph, snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
-          renderIntakeReport(snapshot.count, [], true);
-          showToast(`Loaded ${snapshot.count} parsed nodes from ${fileList[0].name}`);
-          return;
-        }
-        if (snapshot && snapshot.type === 'files') {
-          parseRepositoryIntoGraph(snapshot.files, snapshot.name, 'Imported from Cartograph JSON snapshot', snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
-          renderIntakeReport(snapshot.count, [], true);
-          showToast(`Loaded ${snapshot.count} files from ${fileList[0].name}`);
-          return;
+        if (singleText !== undefined) {
+          const batch = CartographIntake.processBatch([{ path: fileList[0].name, size: fileList[0].size, content: singleText }]);
+          if (batch.snapshot) {
+            const snapshot = batch.snapshot;
+            if (snapshot.type === 'graph') {
+              applyParsedGraph(snapshot.graph, snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
+              renderIntakeReport(snapshot.count, [], true);
+              showToast(`Loaded ${snapshot.count} parsed nodes from ${fileList[0].name}`);
+              return;
+            }
+            if (snapshot.type === 'files') {
+              parseRepositoryIntoGraph(snapshot.files, snapshot.name, 'Imported from Cartograph JSON snapshot', snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
+              renderIntakeReport(snapshot.count, [], true);
+              showToast(`Loaded ${snapshot.count} files from ${fileList[0].name}`);
+              return;
+            }
+          }
         }
       }
 
       // 2. Multi-file directory intake using CartographIntake session & root detector
-      const relativePaths = fileList.map(file => (file.webkitRelativePath || '').replace(/\\/g, '/'));
-      const { sharedRoot, rootFolder, root } = typeof CartographIntake !== 'undefined' && CartographIntake.detectSharedRoot
-        ? CartographIntake.detectSharedRoot(relativePaths)
-        : (() => {
-            const r = relativePaths[0].split('/')[0];
-            const sr = r && relativePaths.every(path => path.includes('/') && path.split('/')[0] === r);
-            return { sharedRoot: sr, rootFolder: sr ? r : 'local-project', root: r };
-          })();
-
-      const session = typeof CartographIntake !== 'undefined' && CartographIntake.createIntakeSession
-        ? CartographIntake.createIntakeSession()
-        : null;
-
-      const collected = [], skipped = [], seen = new Set(), reported = new Set();
-      function skip(path, reason, directory = false) {
-        const key = `${reason}:${path}`;
-        if (!directory || !reported.has(key)) { skipped.push({ path, reason }); reported.add(key); }
-      }
+      const relativePaths = fileList.map(file => (file.webkitRelativePath || file.name || '').replace(/\\/g, '/'));
+      const { sharedRoot, rootFolder, root } = CartographIntake.detectSharedRoot(relativePaths);
+      const session = CartographIntake.createIntakeSession();
 
       for (let index = 0; index < fileList.length; index++) {
         const file = fileList[index];
-        const rawPath = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+        const rawPath = (file.webkitRelativePath || file.name || '').replace(/\\/g, '/');
         const normalizedPath = (sharedRoot ? rawPath.slice(root.length + 1) : rawPath).split('/').filter(Boolean).join('/');
         const hasSelectedRoot = relativePaths[index].includes('/');
         const policyPath = hasSelectedRoot ? rawPath.slice(rawPath.indexOf('/') + 1) : normalizedPath;
         const reportPrefix = hasSelectedRoot && !sharedRoot ? rawPath.slice(0, rawPath.indexOf('/') + 1) : '';
 
-        if (session) {
-          const check = session.checkAndInclude(normalizedPath, policyPath, file.size, reportPrefix);
-          if (!check.included) continue;
-          try {
-            const content = index === 0 && singleText !== undefined ? singleText : await file.text();
-            session.recordIncluded({ path: normalizedPath, content });
-          } catch (error) {
-            session.recordSkipped(normalizedPath, 'unreadable');
-          }
-        } else {
-          const decision = CartographIntake.checkFile(policyPath, file.size);
-          if (!decision.include) { skip(reportPrefix + decision.skippedPath, decision.reason, decision.skippedPath !== policyPath); continue; }
-          if (seen.has(normalizedPath)) { skip(normalizedPath, 'duplicate'); continue; }
-          seen.add(normalizedPath);
-          try {
-            const content = index === 0 && singleText !== undefined ? singleText : await file.text();
-            collected.push({ path: normalizedPath, content });
-          } catch (error) { skip(normalizedPath, 'unreadable'); }
+        const check = session.checkAndInclude(normalizedPath, policyPath, file.size, reportPrefix);
+        if (!check.included) continue;
+        try {
+          const content = index === 0 && singleText !== undefined ? singleText : await file.text();
+          session.recordIncluded({ path: normalizedPath, content });
+        } catch (error) {
+          session.recordSkipped(normalizedPath, 'unreadable');
         }
       }
 
-      const report = session ? session.getSummary() : { included: collected, skipped };
+      const report = session.getSummary();
       renderIntakeReport(report.included.length, report.skipped);
       if (!report.included.length) {
         showToast(`No files included; existing map kept. ${report.skipped.length} entries skipped — open Last intake for reasons.`, 'warn');
@@ -612,10 +589,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
         if (!node) return false;
         const canvas = document.getElementById('dependencyCanvas');
         if (canvas) {
-          const cx = canvas.clientWidth / 2;
-          const cy = canvas.clientHeight / 2;
-          state.camera.x = cx - node.x * state.camera.zoom;
-          state.camera.y = cy - node.y * state.camera.zoom;
+          state.camera = CartographCamera.centerOnNode(state.camera, node, canvas.clientWidth, canvas.clientHeight);
           return true;
         }
         return false;
