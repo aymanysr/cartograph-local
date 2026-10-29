@@ -20,6 +20,7 @@
       agentWalkedFiles: new Set(),
       agentActiveEdges: new Set(),
       layerFilter: 'all',
+      folderFilter: null,
       fileSortMode: 'blast',
       searchQuery: '',
       graphLayout: 'dag',
@@ -162,7 +163,34 @@
         return false;
       }
       if (!state.graph.nodes.length) { state.camera = { x: 0, y: 0, zoom: 1 }; return true; }
-      state.camera = CartographCamera.fitToNodes(state.graph.nodes, canvas.clientWidth, canvas.clientHeight, { top: 48, right: 16, bottom: 16, left: 16 });
+
+      let targetNodes = state.graph.nodes;
+      if (state.folderFilter && state.layerFilter !== 'all') {
+        const folder = state.folderFilter;
+        const matching = state.graph.nodes.filter(n =>
+          (folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))) &&
+          n.layer === state.layerFilter
+        );
+        if (matching.length) {
+          targetNodes = matching;
+        } else {
+          const folderOnly = state.graph.nodes.filter(n =>
+            folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+          );
+          if (folderOnly.length) targetNodes = folderOnly;
+        }
+      } else if (state.folderFilter) {
+        const folder = state.folderFilter;
+        const matching = state.graph.nodes.filter(n =>
+          folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+        );
+        if (matching.length) targetNodes = matching;
+      } else if (state.layerFilter !== 'all') {
+        const matching = state.graph.nodes.filter(n => n.layer === state.layerFilter);
+        if (matching.length) targetNodes = matching;
+      }
+
+      state.camera = CartographCamera.fitToNodes(targetNodes, canvas.clientWidth, canvas.clientHeight, { top: 48, right: 16, bottom: 16, left: 16 });
       state.ui.pendingFit = false;
       return true;
     }
@@ -222,6 +250,7 @@
 
       function setFilter(updates = {}) {
         if (updates.layerFilter !== undefined) s.layerFilter = updates.layerFilter;
+        if (updates.folderFilter !== undefined) s.folderFilter = updates.folderFilter;
         if (updates.searchQuery !== undefined) s.searchQuery = updates.searchQuery;
         if (updates.fileSortMode !== undefined) s.fileSortMode = updates.fileSortMode;
         if (typeof renderFileListSidebar === 'function') renderFileListSidebar();

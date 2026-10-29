@@ -367,10 +367,31 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       state.layerFilter = layer;
       document.querySelectorAll('.layer-pill').forEach(btn => {
         const isMatch = btn.dataset.layer === layer;
+        btn.setAttribute('aria-pressed', String(isMatch));
         btn.className = isMatch
-          ? 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-white'
+          ? 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-white active'
           : 'layer-pill px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 hover:bg-slate-700';
       });
+
+      if (layer !== 'all' && state.graph && state.graph.nodes) {
+        let matching = state.graph.nodes.filter(n => n.layer === layer);
+        if (state.folderFilter) {
+          const folder = state.folderFilter;
+          const folderNodes = matching.filter(n =>
+            folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+          );
+          if (folderNodes.length) matching = folderNodes;
+        }
+        const canvas = document.getElementById('dependencyCanvas');
+        if (canvas && matching.length && typeof CartographCamera !== 'undefined') {
+          state.camera = CartographCamera.fitToNodes(matching, canvas.clientWidth, canvas.clientHeight, { top: 60, right: 60, bottom: 60, left: 60 });
+        }
+      } else if (layer === 'all') {
+        if (typeof fitGraphToCanvas === 'function') {
+          fitGraphToCanvas();
+        }
+      }
+
       renderFileListSidebar();
     }
 
@@ -782,6 +803,13 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       add('fit','Fit map',map(resetGraphView),hasNodes,'Load files to fit the map');
       add('zoom-out','Zoom out',map(()=>zoomGraph(.83)),hasNodes,'Load files to zoom');
       add('zoom-in','Zoom in',map(()=>zoomGraph(1.2)),hasNodes,'Load files to zoom');
+      add('clear-folder-focus','Clear folder focus'+(state.folderFilter ? ' ('+state.folderFilter+')' : ''),map(clearFolderFocus),Boolean(state.folderFilter),'No folder is currently focused');
+      if (hasNodes) {
+        const folders = Array.from(new Set(state.graph.nodes.map(n => n.folder || '/'))).sort();
+        folders.forEach(f => {
+          add('focus-folder-'+f,'Focus folder: '+f+(state.folderFilter===f?' (focused)':''),map(()=>focusFolder(f)));
+        });
+      }
       add('export','Export JSON',exportGraphSnapshot);
       add('folder','Open folder',triggerFolderUpload);
       add('add-file','Add file',openAddFileModal);

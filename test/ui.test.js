@@ -52,6 +52,7 @@ test('inspector panel renders metadata, circular cycle warning, and quick action
       removeAttribute(k) { attrs.delete(k); },
       appendChild(child) { this.children.push(child); return child; },
       replaceChildren() { this.children = []; this.innerHTML = ''; },
+      remove() {},
       querySelector(sel) { return null; },
       querySelectorAll(sel) {
         if (sel === 'button') {
@@ -188,6 +189,7 @@ test('agent trace and evals view support tool badges, expand-all and JSON report
       removeAttribute(k) { attrs.delete(k); },
       appendChild(child) { this.children.push(child); return child; },
       replaceChildren() { this.children = []; this.innerHTML = ''; },
+      remove() {},
       querySelector(sel) { return null; },
       querySelectorAll(sel) { return []; },
       click() {},
@@ -364,4 +366,216 @@ test('agent trace and evals view support tool badges, expand-all and JSON report
   assert.ok(casesHtml.includes('data-filepath="src/untraced.ts"')); // CLAUDE.md Invariant 2 compliance!
   assert.ok(casesHtml.includes('Missed Expected Citations (1 files)'));
   assert.ok(casesHtml.includes('data-filepath="src/missing.ts"'));
+});
+
+test('folder focus, camera refit, LOD macro zoom and browser filter clearing', () => {
+  const elements = new Map();
+  const el = (tag = 'div') => {
+    const classes = new Set();
+    const attrs = new Map();
+    return {
+      tagName: tag.toUpperCase(),
+      getClientRects() { return [{ width: 1000, height: 800 }]; },
+      value: '',
+      children: [],
+      textContent: '',
+      innerHTML: '',
+      dataset: {},
+      style: {},
+      disabled: false,
+      classList: {
+        add(c) { classes.add(c); },
+        remove(c) { classes.delete(c); },
+        toggle(c, force) {
+          if (force === undefined) {
+            if (classes.has(c)) classes.delete(c); else classes.add(c);
+          } else if (force) classes.add(c);
+          else classes.delete(c);
+        },
+        contains(c) { return classes.has(c); },
+      },
+      setAttribute(k, v) { attrs.set(k, String(v)); },
+      getAttribute(k) { return attrs.get(k); },
+      removeAttribute(k) { attrs.delete(k); },
+      appendChild(child) { this.children.push(child); return child; },
+      replaceChildren() { this.children = []; this.innerHTML = ''; },
+      remove() {},
+      querySelector(sel) { return null; },
+      querySelectorAll(sel) { return []; },
+      scrollTop: 0,
+      clientWidth: 1000,
+      clientHeight: 800,
+      hidden: false,
+    };
+  };
+
+  const getOrCreate = (id, tag = 'div') => {
+    if (!elements.has(id)) elements.set(id, el(tag));
+    return elements.get(id);
+  };
+
+  const layerPills = ['all', 'core', 'parser', 'agent', 'api', 'ui'].map(layer => {
+    const btn = el('button');
+    btn.dataset.layer = layer;
+    btn.className = `layer-pill ${layer === 'all' ? 'active' : ''}`;
+    return btn;
+  });
+
+  const canvas = getOrCreate('dependencyCanvas', 'canvas');
+  canvas.width = 1000;
+  canvas.height = 800;
+  const mockCtx = {
+    save() {},
+    restore() {},
+    beginPath() {},
+    closePath() {},
+    roundRect() {},
+    rect() {},
+    fillRect() {},
+    strokeRect() {},
+    clip() {},
+    fill() {},
+    stroke() {},
+    fillText() {},
+    measureText(text) { return { width: (text || '').length * 7 }; },
+    clearRect() {},
+    setLineDash() {},
+    moveTo() {},
+    lineTo() {},
+    bezierCurveTo() {},
+    arc() {},
+    scale() {},
+    translate() {},
+  };
+  canvas.getContext = () => mockCtx;
+  canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 800 });
+
+  const context = vm.createContext({
+    console,
+    setTimeout,
+    clearTimeout,
+    window: {
+      addEventListener() {},
+      innerWidth: 1200,
+      showToast() {},
+    },
+    document: {
+      getElementById(id) {
+        return getOrCreate(id);
+      },
+      createElement(tag) {
+        return el(tag);
+      },
+      body: el('body'),
+      querySelectorAll(sel) {
+        if (sel === '.layer-pill') return layerPills;
+        return [];
+      },
+      addEventListener() {},
+    },
+    lucide: {
+      createIcons() {},
+    },
+  });
+
+  for (const file of [
+    'lib/cartograph-intake.js',
+    'lib/cartograph-parser.js',
+    'lib/cartograph-agent.js',
+    'lib/cartograph-evals.js',
+    'lib/cartograph-fit.js',
+    'lib/cartograph-layouts.js',
+    'lib/cartograph-render-math.js',
+    'app/cartograph-preset-repos.js',
+    'app/cartograph-graph-state.js',
+    'app/cartograph-canvas-render.js',
+    'app/cartograph-ui-panels.js',
+    'app/cartograph-agent-evals.js',
+    'app/cartograph-app-shell.js',
+  ]) {
+    vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
+  }
+
+  const run = src => vm.runInContext(src, context);
+
+  // Setup test graph with multiple folders and layers
+  run(`
+    state.graph = {
+      nodes: [
+        { path: 'auth-profile-web/src/auth/AuthProvider.jsx', label: 'AuthProvider.jsx', folder: 'auth-profile-web/src/auth', layer: 'ui', loc: 120, exports: ['AuthProvider'], totalImpact: 5, hop1Files: [], hop2Files: [], outboundEdges: [], x: 100, y: 100 },
+        { path: 'auth-profile-web/src/components/Connections.jsx', label: 'Connections.jsx', folder: 'auth-profile-web/src/components', layer: 'ui', loc: 80, exports: ['Connections'], totalImpact: 2, hop1Files: [], hop2Files: [], outboundEdges: [], x: 220, y: 120 },
+        { path: 'src/core/db.js', label: 'db.js', folder: 'src/core', layer: 'core', loc: 200, exports: ['query'], totalImpact: 10, hop1Files: [], hop2Files: [], outboundEdges: [], x: 600, y: 400 },
+        { path: 'package.json', label: 'package.json', folder: '', layer: 'core', loc: 30, exports: [], totalImpact: 0, hop1Files: [], hop2Files: [], outboundEdges: [], x: 0, y: 0 }
+      ],
+      edges: [
+        { source: 'auth-profile-web/src/components/Connections.jsx', target: 'auth-profile-web/src/auth/AuthProvider.jsx', line: 5, statement: 'import { AuthProvider } from "./auth"' }
+      ],
+      cycles: [],
+      name: 'test-repo',
+    };
+    state.fileSortMode = 'path';
+    state.activeView = 'explorer';
+  `);
+
+  // 1. Initial render of file list sidebar in folder tree mode
+  run(`renderFileListSidebar()`);
+  const listContainer = getOrCreate('fileListContainer');
+  assert.ok(listContainer.innerHTML.includes('auth-profile-web/src/auth'));
+  assert.ok(listContainer.innerHTML.includes('auth-profile-web/src/components'));
+  assert.ok(listContainer.innerHTML.includes('src/core'));
+  assert.ok(listContainer.innerHTML.includes('Focus'));
+
+  // 2. Focus folder
+  run(`focusFolder('auth-profile-web')`);
+  assert.equal(run(`state.folderFilter`), 'auth-profile-web');
+  const activeLayerHeading = getOrCreate('activeLayerName');
+  assert.equal(activeLayerHeading.textContent, '📁 auth-profile-web');
+  const clearBtn = getOrCreate('clearLayerFilter');
+  assert.equal(clearBtn.hidden, false);
+  assert.equal(clearBtn.textContent, 'Clear focus');
+
+  // Check camera was fit to the focused nodes
+  const camAfterFocus = run(`state.camera`);
+  assert.ok(camAfterFocus.zoom > 0);
+
+  // Check sidebar markup highlights the focused folder
+  run(`renderFileListSidebar()`);
+  assert.ok(listContainer.innerHTML.includes('Focused ✕'));
+
+  // 3. Focus folder toggle (calling again on same folder clears it)
+  run(`focusFolder('auth-profile-web')`);
+  assert.equal(run(`state.folderFilter`), null);
+  assert.equal(clearBtn.hidden, true);
+
+  // 4. Clear folder focus explicitly
+  run(`focusFolder('src/core')`);
+  assert.equal(run(`state.folderFilter`), 'src/core');
+  run(`clearFolderFocus()`);
+  assert.equal(run(`state.folderFilter`), null);
+
+  // 5. Layer filter setting and camera refit
+  run(`setLayerFilter('core')`);
+  assert.equal(run(`state.layerFilter`), 'core');
+  assert.equal(layerPills.find(p => p.dataset.layer === 'core').getAttribute('aria-pressed'), 'true');
+  assert.equal(layerPills.find(p => p.dataset.layer === 'all').getAttribute('aria-pressed'), 'false');
+
+  // 6. Clear all browser filters
+  run(`focusFolder('auth-profile-web')`);
+  run(`clearAllBrowserFilters()`);
+  assert.equal(run(`state.layerFilter`), 'all');
+  assert.equal(run(`state.folderFilter`), null);
+  assert.equal(layerPills.find(p => p.dataset.layer === 'all').getAttribute('aria-pressed'), 'true');
+
+  // 7. Macro zoom Level-of-Detail canvas rendering
+  run(`
+    state.camera = { x: 0, y: 0, zoom: 0.25 };
+    drawDependencyGraph();
+  `);
+  // Renders cleanly at zoom < 0.45 without errors
+  assert.ok(true);
+
+  // 8. Palette integration: folder actions available
+  const paletteResults = JSON.parse(run(`JSON.stringify(getPaletteResults('Folder', 'commands'))`));
+  assert.ok(paletteResults.results.some(r => r.label.includes('Focus folder: auth-profile-web')));
+  assert.ok(paletteResults.results.some(r => r.label.includes('Focus folder: src/core')));
 });

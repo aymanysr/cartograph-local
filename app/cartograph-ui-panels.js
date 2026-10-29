@@ -77,15 +77,75 @@
       renderInspectorPanel();
     }
 
+    function focusFolder(folder) {
+      if (!folder) return;
+      if (state.folderFilter === folder) {
+        clearFolderFocus();
+        return;
+      }
+      state.folderFilter = folder;
+
+      const matching = state.graph.nodes ? state.graph.nodes.filter(n =>
+        folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+      ) : [];
+
+      const canvas = document.getElementById('dependencyCanvas');
+      if (canvas && matching.length && typeof CartographCamera !== 'undefined') {
+        state.camera = CartographCamera.fitToNodes(matching, canvas.clientWidth, canvas.clientHeight, { top: 60, right: 60, bottom: 60, left: 60 });
+      }
+
+      renderFileListSidebar();
+      if (typeof showToast === 'function') {
+        showToast(`Focused folder: ${folder} (${matching.length} files)`);
+      }
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
+    }
+
+    function clearFolderFocus() {
+      state.folderFilter = null;
+      if (typeof fitGraphToCanvas === 'function') {
+        fitGraphToCanvas();
+      }
+      renderFileListSidebar();
+      if (typeof showToast === 'function') {
+        showToast('Folder focus cleared');
+      }
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
+    }
+
+    function clearAllBrowserFilters() {
+      state.layerFilter = 'all';
+      state.folderFilter = null;
+      document.querySelectorAll('.layer-pill').forEach(btn => {
+        btn.setAttribute('aria-pressed', String(btn.dataset.layer === 'all'));
+      });
+      if (typeof fitGraphToCanvas === 'function') {
+        fitGraphToCanvas();
+      }
+      renderFileListSidebar();
+      if (typeof showToast === 'function') {
+        showToast('All filters cleared');
+      }
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
+    }
+
     function renderFileListSidebar() {
       const container = document.getElementById('fileListContainer');
       if (!container) return;
 
-      document.getElementById('sortBtnBlast').setAttribute('aria-pressed', String(state.fileSortMode === 'blast'));
-      document.getElementById('sortBtnPath').setAttribute('aria-pressed', String(state.fileSortMode === 'path'));
+      const sortBlast = document.getElementById('sortBtnBlast');
+      const sortPath = document.getElementById('sortBtnPath');
+      if (sortBlast) sortBlast.setAttribute('aria-pressed', String(state.fileSortMode === 'blast'));
+      if (sortPath) sortPath.setAttribute('aria-pressed', String(state.fileSortMode === 'path'));
       const scrollTop = container.scrollTop;
       const q = state.searchQuery.trim().toLowerCase();
-      let filtered = state.graph.nodes.filter(n => {
+      let filtered = (state.graph.nodes || []).filter(n => {
         if (state.layerFilter !== 'all' && n.layer !== state.layerFilter) return false;
         if (!q) return true;
         return n.path.toLowerCase().includes(q) || n.exports.some(ex => ex.toLowerCase().includes(q));
@@ -98,9 +158,21 @@
       }
 
       const heading = document.getElementById('activeLayerName');
-      if (heading) heading.textContent = state.layerFilter === 'all' ? 'Files' : getLayerMeta(state.layerFilter).label;
+      if (heading) {
+        if (state.folderFilter) {
+          heading.textContent = `📁 ${state.folderFilter}`;
+        } else if (state.layerFilter !== 'all') {
+          heading.textContent = getLayerMeta(state.layerFilter).label;
+        } else {
+          heading.textContent = 'Files';
+        }
+      }
       const clear = document.getElementById('clearLayerFilter');
-      if (clear) clear.hidden = state.layerFilter === 'all';
+      if (clear) {
+        const hasFilter = state.layerFilter !== 'all' || Boolean(state.folderFilter);
+        clear.hidden = !hasFilter;
+        clear.textContent = state.folderFilter ? 'Clear focus' : 'Clear filter';
+      }
       if (filtered.length === 0) {
         container.innerHTML = `<div class="p-4 text-center text-xs required-muted">No files match "${escapeHtml(state.searchQuery)}"</div>`;
         return;
@@ -109,11 +181,37 @@
       let previousFolder = null;
       container.innerHTML = filtered.map(node => {
         const folder = node.folder || '/';
-        const group = state.fileSortMode === 'path' && folder !== previousFolder ? `<div class="folder-heading">${escapeHtml(folder)}</div>` : '';
-        previousFolder = folder;
+        let group = '';
+        if (state.fileSortMode === 'path' && folder !== previousFolder) {
+          const isFocused = state.folderFilter && (
+            folder === state.folderFilter ||
+            (state.folderFilter !== '/' && folder.startsWith(state.folderFilter + '/'))
+          );
+          const folderNodes = (state.graph.nodes || []).filter(n =>
+            folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+          );
+          const count = folderNodes.length;
+          group = `
+            <div class="folder-heading flex items-center justify-between group/f ${isFocused ? 'folder-heading-focused' : ''}">
+              <button type="button" onclick="focusFolder('${escapeHtml(folder)}')" class="folder-title-btn flex items-center gap-1.5 min-w-0 text-left hover:text-white transition-colors flex-1" title="Focus map on ${escapeHtml(folder)} (${count} files)">
+                <i data-lucide="${isFocused ? 'folder-open' : 'folder'}" class="w-3.5 h-3.5 shrink-0 ${isFocused ? 'text-amber-400' : 'text-slate-400'}"></i>
+                <span class="truncate font-mono">${escapeHtml(folder)}</span>
+                <span class="text-[10px] text-slate-500 font-mono shrink-0">(${count})</span>
+              </button>
+              <button type="button" onclick="${isFocused ? 'clearFolderFocus()' : `focusFolder('${escapeHtml(folder)}')`}" class="folder-focus-pill text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 ml-1.5 ${isFocused ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'}" title="${isFocused ? 'Clear folder focus' : 'Focus and zoom on this folder'}">
+                ${isFocused ? 'Focused ✕' : 'Focus'}
+              </button>
+            </div>
+          `;
+          previousFolder = folder;
+        }
         return `${group}<button type="button" data-filepath="${escapeHtml(node.path)}" title="${escapeHtml(node.path)}" aria-label="${escapeHtml(node.path)}" aria-current="${node.path === state.selectedFile ? 'true' : 'false'}" class="file-row"><span>${escapeHtml(node.label)}</span><span class="file-impact ${node.totalImpact ? 'nonzero' : ''}">${node.totalImpact}</span></button>`;
       }).join('');
       container.scrollTop = scrollTop;
+
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+      }
     }
 
     function buildGroundedModuleExplanationHtml(node) {

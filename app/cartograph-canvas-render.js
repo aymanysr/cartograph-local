@@ -93,27 +93,33 @@
         state.graph._labelMapNodes = state.graph.nodes;
       }
 
-      // 2. Directory Cluster Region Watermarks (Cluster mode)
+      // 2. Directory Cluster Region Watermarks (Cluster mode or macro zoom)
       const isClusterMode = state.graphLayout === 'force' || state.graphLayout === 'cluster';
-      if (isClusterMode && state.graph.nodes.length) {
+      const zoom = (state.camera && state.camera.zoom) ? state.camera.zoom : 1;
+      const shouldDrawHulls = isClusterMode || zoom < 0.45;
+
+      if (shouldDrawHulls && state.graph.nodes.length) {
         const getDir = (p) => (typeof CartographLayouts !== 'undefined' ? CartographLayouts.getEffectiveDirectory(p) : (p.split('/')[0] || 'root'));
         const hulls = (typeof CartographRenderMath !== 'undefined')
           ? CartographRenderMath.computeClusterHulls(state.graph.nodes, getDir, 24)
           : [];
         for (const hull of hulls) {
+          const isHullFocused = state.folderFilter && (hull.directory === state.folderFilter || state.folderFilter.startsWith(hull.directory) || hull.directory.startsWith(state.folderFilter));
           ctx.save();
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
-          ctx.lineWidth = 1;
+          ctx.fillStyle = isHullFocused ? 'rgba(217, 164, 65, 0.07)' : 'rgba(255, 255, 255, 0.02)';
+          ctx.strokeStyle = isHullFocused ? 'rgba(217, 164, 65, 0.45)' : 'rgba(148, 163, 184, 0.12)';
+          ctx.lineWidth = isHullFocused ? 2 : 1;
           ctx.beginPath();
           ctx.roundRect(hull.bounds.x, hull.bounds.y, hull.bounds.width, hull.bounds.height, 12);
           ctx.fill();
           ctx.stroke();
 
-          ctx.fillStyle = '#94a3b8'; // WCAG AA compliant contrast (D2)
-          ctx.font = '600 11px "JetBrains Mono", monospace';
+          // Scale directory label inversely with zoom so directory names are readable when zoomed out
+          const dirFontPx = Math.min(24, Math.max(11, Math.round(11 / Math.max(0.2, zoom))));
+          ctx.fillStyle = isHullFocused ? '#d9a441' : '#94a3b8'; // WCAG AA compliant contrast (D2)
+          ctx.font = `600 ${dirFontPx}px "JetBrains Mono", monospace`;
           ctx.textAlign = 'left';
-          ctx.fillText(`📁 ${hull.directory}/ (${hull.nodeCount})`, hull.bounds.labelX, hull.bounds.labelY);
+          ctx.fillText(`📁 ${hull.directory}/ (${hull.nodeCount})`, hull.bounds.labelX, hull.bounds.labelY - (dirFontPx > 11 ? dirFontPx / 2 : 0));
           ctx.restore();
         }
       }
@@ -175,6 +181,13 @@
           }
         } else if (state.isolateBlastRadius && role === 'neutral') {
           edgeAlpha = 0.12;
+        } else if (state.folderFilter && role === 'neutral') {
+          const inFocus = (p) => state.folderFilter === '/'
+            ? (!p.includes('/') || p.startsWith('/'))
+            : (p.startsWith(state.folderFilter + '/') || p === state.folderFilter);
+          if (!inFocus(source.path) && !inFocus(target.path)) {
+            edgeAlpha = 0.08;
+          }
         } else if (state.layerFilter !== 'all' && source.layer !== state.layerFilter && target.layer !== state.layerFilter) {
           edgeAlpha = 0.15;
         } else if (role === 'hop1') {
@@ -267,10 +280,18 @@
         ctx.save();
 
         let nodeAlpha = 1;
+        const inFocusedFolder = !state.folderFilter || (
+          state.folderFilter === '/'
+            ? (!node.folder || node.folder === '/')
+            : (node.folder === state.folderFilter || node.path.startsWith(state.folderFilter + '/'))
+        );
+
         if (hovered && !isHoveredSelf && !isHoveredNeighbor) {
           nodeAlpha = 0.38; // Retain ambient legibility (D2)
         } else if (state.isolateBlastRadius && role === 'neutral') {
           nodeAlpha = 0.18;
+        } else if (state.folderFilter && !inFocusedFolder && role === 'neutral') {
+          nodeAlpha = 0.15; // Dim outside nodes when folder focus is active
         } else if (state.layerFilter !== 'all' && node.layer !== state.layerFilter && role === 'neutral') {
           nodeAlpha = 0.18;
         }
@@ -298,6 +319,9 @@
           strokeW = 1.5;
         } else if (role === 'hop2') {
           strokeColor = '#d9a441';
+          strokeW = 1.5;
+        } else if (state.folderFilter && inFocusedFolder) {
+          strokeColor = '#f59e0b'; // Amber border highlight for nodes in the focused folder
           strokeW = 1.5;
         }
 
@@ -333,20 +357,32 @@
         let displayLabel = labelInfo ? labelInfo.displayLabel : baseName;
         const isColliding = labelInfo ? labelInfo.isColliding : false;
 
-        ctx.font = '500 11px "JetBrains Mono", monospace';
-        ctx.fillStyle = '#ffffff';
+        const isMacroZoom = zoom < 0.45;
+        if (isMacroZoom) {
+          // In macro zoom mode, render a larger bold label centered vertically to prevent illegible micro-text
+          const fontPx = Math.min(20, Math.max(12, Math.round(9 / Math.max(0.2, zoom))));
+          ctx.font = `600 ${fontPx}px "JetBrains Mono", monospace`;
+          ctx.fillStyle = '#ffffff';
 
-        while (displayLabel.length && ctx.measureText(displayLabel).width > 156) displayLabel = displayLabel.slice(0, -1);
-        if (displayLabel !== baseName && (!isColliding || displayLabel !== (labelInfo ? labelInfo.displayLabel : ''))) {
-          displayLabel = displayLabel.slice(0, -1) + '…';
+          while (displayLabel.length && ctx.measureText(displayLabel).width > 168) displayLabel = displayLabel.slice(0, -1);
+          if (displayLabel !== baseName) displayLabel = displayLabel.slice(0, -1) + '…';
+          ctx.fillText(displayLabel, bounds.minX + 10, node.y);
+        } else {
+          ctx.font = '500 11px "JetBrains Mono", monospace';
+          ctx.fillStyle = '#ffffff';
+
+          while (displayLabel.length && ctx.measureText(displayLabel).width > 156) displayLabel = displayLabel.slice(0, -1);
+          if (displayLabel !== baseName && (!isColliding || displayLabel !== (labelInfo ? labelInfo.displayLabel : ''))) {
+            displayLabel = displayLabel.slice(0, -1) + '…';
+          }
+
+          ctx.fillText(displayLabel, bounds.minX + 12, node.y - 8);
+
+          // Subtitle: Layer Tag & Dependents (WCAG AA compliant #a1a1aa - D2)
+          ctx.fillStyle = '#a1a1aa';
+          ctx.font = '400 10px "JetBrains Mono", monospace';
+          ctx.fillText(`${meta.label} · ${node.totalImpact} dep`, bounds.minX + 12, node.y + 10);
         }
-
-        ctx.fillText(displayLabel, bounds.minX + 12, node.y - 8);
-
-        // Subtitle: Layer Tag & Dependents (WCAG AA compliant #a1a1aa - D2)
-        ctx.fillStyle = '#a1a1aa';
-        ctx.font = '400 10px "JetBrains Mono", monospace';
-        ctx.fillText(`${meta.label} · ${node.totalImpact} dep`, bounds.minX + 12, node.y + 10);
 
         if (state.agentWalkedFiles.has(node.path)) {
           ctx.fillStyle = '#5fc39c';

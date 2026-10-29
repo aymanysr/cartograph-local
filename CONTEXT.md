@@ -177,5 +177,31 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
   - 132/132 tests passing across all 11 test suites (`node --test`).
   - Headless Playwright suite verified with 0 page errors and 0 console errors.
 
+#### ADR-010: Folder Focus & Macro Zoom Level-of-Detail (LOD)
+- **Status:** Implemented (2026-10-29)
+- **Motivation:**
+  In medium-to-large repositories (50–300+ files), rendering the entire codebase at once scales the canvas camera down to `zoom < 0.45` (often 0.15–0.25). At this zoom distance, standard 11px font sizes shrank to micro-text (1.6px–2.5px screen space), making node cards illegible specks. Additionally, users navigating complex directories (e.g., `auth-profile-web`, `src/core`) lacked a way to isolate and frame specific folder subtrees directly from the file browser.
+- **Architectural Seams Implemented:**
+  1. **Folder Focus State & Camera Subsets (`app/cartograph-graph-state.js`, `app/cartograph-ui-panels.js`)**:
+     - Introduced `state.folderFilter` (null or target folder path) alongside `state.layerFilter`.
+     - `focusFolder(folder)`: Frames the camera directly onto matching direct and nested nodes via `CartographCamera.fitToNodes()`, updates sidebar state, and dispatches toasts. Calling `focusFolder` on an already-focused folder toggles it off.
+     - `clearFolderFocus()` & `clearAllBrowserFilters()`: Resets filters and refits camera to the full graph or active layer.
+     - `fitGraphToCanvas()`: Automatically computes camera viewports for folder subsets, layer subsets, or their intersection when active.
+  2. **Interactive Folder Tree Navigation (`app/cartograph-ui-panels.js`, `cartograph.html`)**:
+     - Upgraded folder headings in Folder Tree mode (`state.fileSortMode === 'path'`) from static text into interactive folder hubs with folder icons (`folder`/`folder-open`), file counts `(N)`, and dedicated `[Focus]` / `[Focused ✕]` action pills.
+     - Active focus visually emphasizes the folder row (`.folder-heading-focused`) and surfaces active folder status with a `Clear focus` button in the sidebar heading (`#activeLayerName`, `#clearLayerFilter`).
+     - Command Palette (`⌘K` / `⌘P`) integration: Added `clear-folder-focus` and dynamic `focus-folder-*` actions for instant keyboard navigation across all directories.
+  3. **Macro Zoom Level-of-Detail (LOD) Engine (`app/cartograph-canvas-render.js`)**:
+     - When `zoom < 0.45`, node cards switch to Semantic Zoom: the primary file title is centered vertically and scaled inversely to zoom (`Math.min(20, Math.max(12, Math.round(9 / zoom)))`), guaranteeing a readable screen font size while suppressing secondary metadata to prevent overlapping micro-text.
+     - Folder focus dimming: Dims non-focused nodes (`alpha = 0.15`) and edges (`alpha = 0.08`), highlighting focused folder nodes and cluster hulls with amber borders (`#f59e0b` / `#d9a441`).
+     - Directory cluster hulls are activated in cluster mode and whenever `zoom < 0.45`, scaling watermark labels inversely to maintain macro-level spatial orientation.
+  4. **Un-hidden Layer Filter Pills (`cartograph.html`, `app/cartograph-app-shell.js`)**:
+     - Restored the quiet-shell layer filter row (`#layerFilterContainer`) with pills (`All`, `DB`, `Parser`, `Agent`, `Routes`, `UI`).
+     - Clicking a layer pill now frames the camera directly to nodes in that layer.
+- **Verification:**
+  - 133/133 unit tests passing across all test suites (`node --test`).
+  - Automated Playwright end-to-end browser test verified on live server `http://localhost:4173/` with 0 console errors and 0 exceptions.
+
+
 
 
