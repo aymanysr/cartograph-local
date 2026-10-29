@@ -192,13 +192,16 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
      - Active focus visually emphasizes the folder row (`.folder-heading-focused`) and surfaces active folder status with a `Clear focus` button in the sidebar heading (`#activeLayerName`, `#clearLayerFilter`).
      - Command Palette (`⌘K` / `⌘P`) integration: Added `clear-folder-focus` and dynamic `focus-folder-*` actions for instant keyboard navigation across all directories.
   3. **Macro Zoom Level-of-Detail (LOD) Engine (`app/cartograph-canvas-render.js`)**:
-     - When `zoom < 0.45`, node cards switch to Semantic Zoom: the primary file title is centered vertically and scaled inversely to zoom (`Math.min(20, Math.max(12, Math.round(9 / zoom)))`), guaranteeing a readable screen font size while suppressing secondary metadata to prevent overlapping micro-text.
-     - Folder focus dimming: Dims non-focused nodes (`alpha = 0.15`) and edges (`alpha = 0.08`), highlighting focused folder nodes and cluster hulls with amber borders (`#f59e0b` / `#d9a441`).
-     - Directory cluster hulls are activated in cluster mode and whenever `zoom < 0.45`, scaling watermark labels inversely to maintain macro-level spatial orientation.
-  4. **Un-hidden Layer Filter Pills (`cartograph.html`, `app/cartograph-app-shell.js`)**:
-     - Restored the quiet-shell layer filter row (`#layerFilterContainer`) with pills (`All`, `DB`, `Parser`, `Agent`, `Routes`, `UI`).
-     - Clicking a layer pill now frames the camera directly to nodes in that layer.
-- **Verification:**
+     - When `zoom < 0.45`, node cards switch to Semantic Zoom: the primary file title is centered vertically with a balanced 12px bold font that fits 20+ characters without truncation, while suppressing secondary metadata to eliminate overlapping micro-text.
+     - Folder focus dimming: Dims non-focused nodes (`alpha = 0.15`) and edges (`alpha = 0.16`), highlighting focused folder nodes and cluster hulls with Sky Blue borders (`#38bdf8`) rather than amber, completely preserving amber/rose semantics for Hop-2/Hop-1 blast-radius risk.
+     - Directory cluster hulls are activated in cluster mode with delimiter-checked directory matching and top-left anchored watermarks.
+  4. **Un-hidden Layer Filter Pills & Safe Seams (`cartograph.html`, `app/cartograph-app-shell.js`, `app/cartograph-ui-panels.js`)**:
+     - Restored the quiet-shell layer filter row (`#layerFilterContainer`) in a 3-column grid (`All`, `DB`, `Parser`, `Agent`, `Routes`, `UI`).
+     - Event delegation for folder focus (`data-folder-focus` and `data-folder-clear`), preventing any inline JS quotation / syntax error crashes on paths containing quotes or apostrophes.
+     - Lifecycle hygiene: `applyParsedGraph()` resets `state.folderFilter = null` on repository switch, preventing ghost canvas dimming.
+     - Palette safety: core utility actions (`Export`, `Settings`, `Help`) are registered before dynamic folders, preventing action starvation in large codebases.
+- **Verification & EGM Review**:
+  - Independent parallel EGM review passed with Design Critic (`880cb9d3-ae6f-4e75-927f-117c4e85e16b`) and Structural Critic (`bc5d8c6c-3440-4705-8744-f49ab3b544c0`).
   - 133/133 unit tests passing across all test suites (`node --test`).
   - Automated Playwright end-to-end browser test verified on live server `http://localhost:4173/` with 0 console errors and 0 exceptions.
 

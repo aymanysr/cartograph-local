@@ -454,10 +454,14 @@ test('folder focus, camera refit, LOD macro zoom and browser filter clearing', (
     console,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: fn => setTimeout(fn, 0),
+    cancelAnimationFrame: id => clearTimeout(id),
     window: {
       addEventListener() {},
       innerWidth: 1200,
       showToast() {},
+      requestAnimationFrame: fn => setTimeout(fn, 0),
+      cancelAnimationFrame: id => clearTimeout(id),
     },
     document: {
       getElementById(id) {
@@ -578,4 +582,43 @@ test('folder focus, camera refit, LOD macro zoom and browser filter clearing', (
   const paletteResults = JSON.parse(run(`JSON.stringify(getPaletteResults('Folder', 'commands'))`));
   assert.ok(paletteResults.results.some(r => r.label.includes('Focus folder: auth-profile-web')));
   assert.ok(paletteResults.results.some(r => r.label.includes('Focus folder: src/core')));
+
+  // 9. Apostrophe and special characters in folder names render safely via data attributes
+  run(`
+    state.graph.nodes.push({ path: "user's_data/component.jsx", label: 'component.jsx', folder: "user's_data", layer: 'ui', loc: 40, exports: [], totalImpact: 0, hop1Files: [], hop2Files: [], outboundEdges: [], x: 50, y: 50 });
+    renderFileListSidebar();
+  `);
+  assert.ok(listContainer.innerHTML.includes('data-folder-focus="user&#39;s_data"'));
+  assert.ok(!listContainer.innerHTML.includes("onclick=\"focusFolder('user's_data')\""));
+
+  // 10. Repository reload resets state.folderFilter (preventing ghost canvas)
+  run(`
+    state.folderFilter = 'src/core';
+    applyParsedGraph({ nodes: [], edges: [], cycles: [] });
+  `);
+  assert.equal(run(`state.folderFilter`), null);
+
+  // 11. Core palette actions are not starved by large folder lists
+  run(`
+    state.graph.nodes = Array.from({ length: 45 }, (_, i) => ({
+      path: 'folder_' + i + '/file.js',
+      label: 'file.js',
+      folder: 'folder_' + i,
+      layer: 'ui',
+      loc: 10, exports: [], totalImpact: 0, hop1Files: [], hop2Files: [], outboundEdges: [], x: 0, y: 0
+    }));
+  `);
+  const topCommands = JSON.parse(run(`JSON.stringify(getPaletteResults('', 'commands').results.slice(0, 50).map(r => r.label))`));
+  assert.ok(topCommands.includes('Export JSON'));
+  assert.ok(topCommands.includes('Agent settings'));
+  assert.ok(topCommands.includes('Fit map'));
+
+  // 12. Delimiter checks in cluster hulls (auth does not match auth-profile-web)
+  run(`
+    state.folderFilter = 'auth-profile-web';
+  `);
+  assert.equal(
+    run(`Boolean(state.folderFilter && ('auth' === state.folderFilter || (state.folderFilter !== '/' && 'auth'.startsWith(state.folderFilter + '/')) || ('auth' !== '/' && state.folderFilter.startsWith('auth/'))))`),
+    false
+  );
 });

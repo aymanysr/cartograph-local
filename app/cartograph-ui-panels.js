@@ -9,6 +9,14 @@
       document.addEventListener('click', event => {
         const chip = event.target.closest('[data-filepath]');
         if (chip) selectFileFromUi(chip.dataset.filepath);
+        const focusBtn = event.target.closest('[data-folder-focus]');
+        if (focusBtn) {
+          focusFolder(focusBtn.dataset.folderFocus);
+        }
+        const clearBtn = event.target.closest('[data-folder-clear]');
+        if (clearBtn) {
+          clearFolderFocus();
+        }
       });
     }
 
@@ -84,18 +92,19 @@
         return;
       }
       state.folderFilter = folder;
+      if (typeof CartographStore !== 'undefined' && CartographStore.notify) {
+        CartographStore.notify({ type: 'filter', updates: { folderFilter: folder } });
+      }
 
-      const matching = state.graph.nodes ? state.graph.nodes.filter(n =>
-        folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
-      ) : [];
-
-      const canvas = document.getElementById('dependencyCanvas');
-      if (canvas && matching.length && typeof CartographCamera !== 'undefined') {
-        state.camera = CartographCamera.fitToNodes(matching, canvas.clientWidth, canvas.clientHeight, { top: 60, right: 60, bottom: 60, left: 60 });
+      if (typeof fitGraphToCanvas === 'function') {
+        fitGraphToCanvas({ top: 60, right: 60, bottom: 60, left: 60 });
       }
 
       renderFileListSidebar();
       if (typeof showToast === 'function') {
+        const matching = state.graph.nodes ? state.graph.nodes.filter(n =>
+          folder === '/' ? (!n.folder || n.folder === '/') : (n.folder === folder || n.path.startsWith(folder + '/'))
+        ) : [];
         showToast(`Focused folder: ${folder} (${matching.length} files)`);
       }
       if (typeof lucide !== 'undefined' && lucide.createIcons) {
@@ -105,6 +114,9 @@
 
     function clearFolderFocus() {
       state.folderFilter = null;
+      if (typeof CartographStore !== 'undefined' && CartographStore.notify) {
+        CartographStore.notify({ type: 'filter', updates: { folderFilter: null } });
+      }
       if (typeof fitGraphToCanvas === 'function') {
         fitGraphToCanvas();
       }
@@ -147,6 +159,12 @@
       const q = state.searchQuery.trim().toLowerCase();
       let filtered = (state.graph.nodes || []).filter(n => {
         if (state.layerFilter !== 'all' && n.layer !== state.layerFilter) return false;
+        if (state.folderFilter) {
+          const inFolder = state.folderFilter === '/'
+            ? (!n.folder || n.folder === '/')
+            : (n.folder === state.folderFilter || n.path.startsWith(state.folderFilter + '/'));
+          if (!inFolder) return false;
+        }
         if (!q) return true;
         return n.path.toLowerCase().includes(q) || n.exports.some(ex => ex.toLowerCase().includes(q));
       });
@@ -159,7 +177,9 @@
 
       const heading = document.getElementById('activeLayerName');
       if (heading) {
-        if (state.folderFilter) {
+        if (state.folderFilter && state.layerFilter !== 'all') {
+          heading.textContent = `📁 ${state.folderFilter} · ${getLayerMeta(state.layerFilter).label}`;
+        } else if (state.folderFilter) {
           heading.textContent = `📁 ${state.folderFilter}`;
         } else if (state.layerFilter !== 'all') {
           heading.textContent = getLayerMeta(state.layerFilter).label;
@@ -193,12 +213,12 @@
           const count = folderNodes.length;
           group = `
             <div class="folder-heading flex items-center justify-between group/f ${isFocused ? 'folder-heading-focused' : ''}">
-              <button type="button" onclick="focusFolder('${escapeHtml(folder)}')" class="folder-title-btn flex items-center gap-1.5 min-w-0 text-left hover:text-white transition-colors flex-1" title="Focus map on ${escapeHtml(folder)} (${count} files)">
-                <i data-lucide="${isFocused ? 'folder-open' : 'folder'}" class="w-3.5 h-3.5 shrink-0 ${isFocused ? 'text-amber-400' : 'text-slate-400'}"></i>
+              <button type="button" data-folder-focus="${escapeHtml(folder)}" class="folder-title-btn flex items-center gap-1.5 min-w-0 text-left hover:text-white transition-colors flex-1" aria-pressed="${isFocused ? 'true' : 'false'}" aria-label="${isFocused ? 'Clear focus on ' + escapeHtml(folder) : 'Focus folder ' + escapeHtml(folder) + ' (' + count + ' files)'}">
+                <i data-lucide="${isFocused ? 'folder-open' : 'folder'}" class="w-3.5 h-3.5 shrink-0 ${isFocused ? 'text-sky-400' : 'text-slate-400'}"></i>
                 <span class="truncate font-mono">${escapeHtml(folder)}</span>
-                <span class="text-[10px] text-slate-500 font-mono shrink-0">(${count})</span>
+                <span class="text-[10px] text-slate-400 font-mono shrink-0">(${count})</span>
               </button>
-              <button type="button" onclick="${isFocused ? 'clearFolderFocus()' : `focusFolder('${escapeHtml(folder)}')`}" class="folder-focus-pill text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 ml-1.5 ${isFocused ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'}" title="${isFocused ? 'Clear folder focus' : 'Focus and zoom on this folder'}">
+              <button type="button" ${isFocused ? 'data-folder-clear="true"' : `data-folder-focus="${escapeHtml(folder)}"`} class="folder-focus-pill text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer transition-all shrink-0 ml-1.5 ${isFocused ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40' : 'bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700'}" aria-hidden="true" tabindex="-1">
                 ${isFocused ? 'Focused ✕' : 'Focus'}
               </button>
             </div>

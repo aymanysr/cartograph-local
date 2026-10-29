@@ -81,6 +81,7 @@
       state.panningCanvas = false;
       state.simulateBreakingChange = false;
       state.isolateBlastRadius = false;
+      state.folderFilter = null;
       syncCanvasToggleState();
       const stream = document.getElementById('agentConversationStream');
       if (stream) stream.replaceChildren();
@@ -156,7 +157,7 @@
       return CartographCamera.getNodeBounds(node);
     }
 
-    function fitGraphToCanvas() {
+    function fitGraphToCanvas(paddingOverride) {
       const canvas = document.getElementById('dependencyCanvas');
       if (!canvas || !canvas.clientWidth || !canvas.clientHeight || (canvas.getClientRects && !canvas.getClientRects().length)) {
         state.ui.pendingFit = true;
@@ -190,7 +191,8 @@
         if (matching.length) targetNodes = matching;
       }
 
-      state.camera = CartographCamera.fitToNodes(targetNodes, canvas.clientWidth, canvas.clientHeight, { top: 48, right: 16, bottom: 16, left: 16 });
+      const pad = paddingOverride || { top: 48, right: 16, bottom: 16, left: 16 };
+      state.camera = CartographCamera.fitToNodes(targetNodes, canvas.clientWidth, canvas.clientHeight, pad);
       state.ui.pendingFit = false;
       return true;
     }

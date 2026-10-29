@@ -24,7 +24,8 @@
       if (canvas.width !== Math.floor(W*dpr) || canvas.height !== Math.floor(H*dpr)) {canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);}
       const ctx=canvas.getContext('2d');
       ctx.save();ctx.scale(dpr,dpr);ctx.fillStyle='#141416';ctx.fillRect(0,0,W,H);
-      ctx.translate(state.camera.x,state.camera.y);ctx.scale(state.camera.zoom,state.camera.zoom);
+      const zoom = (state.camera && state.camera.zoom) ? state.camera.zoom : 1;
+      ctx.translate(state.camera.x,state.camera.y);ctx.scale(zoom,zoom);
 
       // 1. Subtle World-Space Dot Grid for Spatial Grounding (batched path - S3/D7)
       const grid = (typeof CartographRenderMath !== 'undefined')
@@ -93,33 +94,37 @@
         state.graph._labelMapNodes = state.graph.nodes;
       }
 
-      // 2. Directory Cluster Region Watermarks (Cluster mode or macro zoom)
+      // 2. Directory Cluster Region Watermarks (Cluster layout mode)
       const isClusterMode = state.graphLayout === 'force' || state.graphLayout === 'cluster';
-      const zoom = (state.camera && state.camera.zoom) ? state.camera.zoom : 1;
-      const shouldDrawHulls = isClusterMode || zoom < 0.45;
-
-      if (shouldDrawHulls && state.graph.nodes.length) {
-        const getDir = (p) => (typeof CartographLayouts !== 'undefined' ? CartographLayouts.getEffectiveDirectory(p) : (p.split('/')[0] || 'root'));
+      if (isClusterMode && state.graph.nodes.length) {
+        const getDir = (p) => {
+          const parts = p.split('/');
+          return parts.length > 1 ? parts.slice(0, -1).join('/') : '/';
+        };
         const hulls = (typeof CartographRenderMath !== 'undefined')
           ? CartographRenderMath.computeClusterHulls(state.graph.nodes, getDir, 24)
           : [];
         for (const hull of hulls) {
-          const isHullFocused = state.folderFilter && (hull.directory === state.folderFilter || state.folderFilter.startsWith(hull.directory) || hull.directory.startsWith(state.folderFilter));
+          const isHullFocused = Boolean(state.folderFilter && (
+            hull.directory === state.folderFilter ||
+            (state.folderFilter !== '/' && hull.directory.startsWith(state.folderFilter + '/')) ||
+            (hull.directory !== '/' && state.folderFilter.startsWith(hull.directory + '/'))
+          ));
           ctx.save();
-          ctx.fillStyle = isHullFocused ? 'rgba(217, 164, 65, 0.07)' : 'rgba(255, 255, 255, 0.02)';
-          ctx.strokeStyle = isHullFocused ? 'rgba(217, 164, 65, 0.45)' : 'rgba(148, 163, 184, 0.12)';
+          ctx.fillStyle = isHullFocused ? 'rgba(56, 189, 248, 0.06)' : 'rgba(255, 255, 255, 0.02)';
+          ctx.strokeStyle = isHullFocused ? 'rgba(56, 189, 248, 0.40)' : 'rgba(148, 163, 184, 0.12)';
           ctx.lineWidth = isHullFocused ? 2 : 1;
           ctx.beginPath();
           ctx.roundRect(hull.bounds.x, hull.bounds.y, hull.bounds.width, hull.bounds.height, 12);
           ctx.fill();
           ctx.stroke();
 
-          // Scale directory label inversely with zoom so directory names are readable when zoomed out
-          const dirFontPx = Math.min(24, Math.max(11, Math.round(11 / Math.max(0.2, zoom))));
-          ctx.fillStyle = isHullFocused ? '#d9a441' : '#94a3b8'; // WCAG AA compliant contrast (D2)
-          ctx.font = `600 ${dirFontPx}px "JetBrains Mono", monospace`;
+          // Position label inside the box at top-left padding with explicit textBaseline = 'top'
+          ctx.fillStyle = isHullFocused ? '#38bdf8' : '#94a3b8'; // WCAG AA compliant contrast
+          ctx.font = '600 12px "JetBrains Mono", monospace';
           ctx.textAlign = 'left';
-          ctx.fillText(`📁 ${hull.directory}/ (${hull.nodeCount})`, hull.bounds.labelX, hull.bounds.labelY - (dirFontPx > 11 ? dirFontPx / 2 : 0));
+          ctx.textBaseline = 'top';
+          ctx.fillText(`📁 ${hull.directory}/ (${hull.nodeCount})`, hull.bounds.x + 12, hull.bounds.y + 8);
           ctx.restore();
         }
       }
@@ -186,7 +191,7 @@
             ? (!p.includes('/') || p.startsWith('/'))
             : (p.startsWith(state.folderFilter + '/') || p === state.folderFilter);
           if (!inFocus(source.path) && !inFocus(target.path)) {
-            edgeAlpha = 0.08;
+            edgeAlpha = 0.16; // Retain ambient topological legibility
           }
         } else if (state.layerFilter !== 'all' && source.layer !== state.layerFilter && target.layer !== state.layerFilter) {
           edgeAlpha = 0.15;
@@ -321,7 +326,7 @@
           strokeColor = '#d9a441';
           strokeW = 1.5;
         } else if (state.folderFilter && inFocusedFolder) {
-          strokeColor = '#f59e0b'; // Amber border highlight for nodes in the focused folder
+          strokeColor = '#38bdf8'; // Sky blue border highlight for nodes in the focused folder (D1: preserves amber for hop2 cascade)
           strokeW = 1.5;
         }
 
@@ -359,14 +364,15 @@
 
         const isMacroZoom = zoom < 0.45;
         if (isMacroZoom) {
-          // In macro zoom mode, render a larger bold label centered vertically to prevent illegible micro-text
-          const fontPx = Math.min(20, Math.max(12, Math.round(9 / Math.max(0.2, zoom))));
-          ctx.font = `600 ${fontPx}px "JetBrains Mono", monospace`;
+          // In macro zoom mode, render a clean 12px bold label centered vertically to prevent micro-text noise
+          ctx.font = '600 12px "JetBrains Mono", monospace';
           ctx.fillStyle = '#ffffff';
 
-          while (displayLabel.length && ctx.measureText(displayLabel).width > 168) displayLabel = displayLabel.slice(0, -1);
-          if (displayLabel !== baseName) displayLabel = displayLabel.slice(0, -1) + '…';
-          ctx.fillText(displayLabel, bounds.minX + 10, node.y);
+          while (displayLabel.length && ctx.measureText(displayLabel).width > 164) displayLabel = displayLabel.slice(0, -1);
+          if (displayLabel !== baseName && (!isColliding || displayLabel !== (labelInfo ? labelInfo.displayLabel : ''))) {
+            displayLabel = displayLabel.slice(0, -1) + '…';
+          }
+          ctx.fillText(displayLabel, bounds.minX + 12, node.y);
         } else {
           ctx.font = '500 11px "JetBrains Mono", monospace';
           ctx.fillStyle = '#ffffff';
