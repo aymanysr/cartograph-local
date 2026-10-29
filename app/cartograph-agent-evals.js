@@ -13,20 +13,48 @@
       switchRightPanelTab('agent');
 
       const stream = document.getElementById('agentConversationStream');
-      const plan = buildDeterministicAgentPlan(questionText.trim());
+      const question = questionText.trim();
+      const graph = state.graph;
+      const config = { ...state.agentConfig };
+      const agentLib = typeof CartographAgent !== 'undefined' ? CartographAgent : null;
+      const modelClient = config.engine !== 'deterministic'
+        ? (agentLib ? agentLib.createModelClient(config, typeof fetch !== 'undefined' ? fetch : null) : {
+            async complete({ systemPrompt, userPrompt, signal } = {}) {
+              const resp = await fetch(config.endpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {})
+                },
+                body: JSON.stringify({
+                  model: config.model,
+                  stream: false,
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt }
+                  ]
+                }),
+                signal
+              });
+              if (!resp.ok) throw new Error("Endpoint returned " + resp.status);
+              const data = await resp.json();
+              return (data.message && data.message.content) || (data.choices && data.choices[0]?.message?.content) || '';
+            }
+          })
+        : null;
 
+      // 1. Initial fast deterministic render
+      const plan = buildDeterministicAgentPlan(question);
       state.agentWalkedFiles = new Set(plan.visitedFiles);
       state.agentActiveEdges = new Set(plan.activeEdges);
       if (plan.primaryFocus) {
         selectFileNode(plan.primaryFocus, false);
       }
 
-      const graph = state.graph;
-      const config = { ...state.agentConfig };
       const stepsHtml = renderAgentTrace(plan);
       const cardId = 'agentRun_' + Date.now() + '_' + stream.children.length;
       const cardHtml = `<article id="${cardId}" class="agent-run">
-        <header><strong>${escapeHtml(questionText)}</strong><span>${plan.steps.length} tool steps</span></header>
+        <header><strong>${escapeHtml(question)}</strong><span>${plan.steps.length} tool steps</span></header>
         <div class="agent-trace"><h3>Tool trace</h3>${stepsHtml}</div>
         <section class="agent-answer"><h3>Answer</h3><div class="agent-synthesis-body">${plan.answerHtml}</div></section>
       </article>`;
@@ -34,50 +62,36 @@
       stream.insertAdjacentHTML('afterbegin', cardHtml);
       lucide.createIcons();
 
-      if (config.engine !== 'deterministic') {
+      // 2. Query model client through CartographAgent if configured
+      if (modelClient) {
         try {
-          const allowedPaths = Array.from(plan.visitedFiles);
-          const sysPrompt = `You are the Cartograph Codebase Agent. You are ONLY allowed to cite files from this verified AST tool output list: ${JSON.stringify(allowedPaths)}. Explain the answer concisely in 3-4 sentences.`;
-          const userPrompt = `Question: ${questionText}\nVerified Tool Trace: ${JSON.stringify(plan.steps)}`;
-
-          const resp = await fetch(config.endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {})
-            },
-            body: JSON.stringify({
-              model: config.model,
-              stream: false,
-              messages: [
-                { role: 'system', content: sysPrompt },
-                { role: 'user', content: userPrompt }
-              ]
-            })
-          });
-          if (state.graph !== graph) return;
-          if (!resp.ok) throw new Error("Endpoint returned " + resp.status);
-          if (resp.ok) {
-            const data = await resp.json();
+          if (agentLib && typeof agentLib.queryAgent === 'function') {
+            const outcome = await agentLib.queryAgent(question, graph, {
+              chipFormatter: makeFileChipHtml,
+              modelClient,
+              config,
+            });
             if (state.graph !== graph) return;
-            const rawText = (data.message && data.message.content) || (data.choices && data.choices[0]?.message?.content) || '';
-            if (rawText) {
-              // Strict grounding contract: the model synthesis may only replace
-              // the deterministic answer when every path-like token it named is
-              // a real graph path that appeared in the tool trace.
-              const tracePaths = CartographEvals.collectTraceFiles(plan);
-              const outcome = CartographAgent.validateSynthesis(rawText, graph, tracePaths);
-              if (outcome.accepted) {
-                const enriched = renderGroundedText(rawText, graph);
-                if (state.graph !== graph) return;
-                const cardEl = document.getElementById(cardId);
-                if (cardEl) {
-                  cardEl.querySelector('.agent-synthesis-body').innerHTML = enriched;
-                }
-              } else {
-                const rejected = outcome.unknownPaths.concat(outcome.unprovenPaths).slice(0, 3).join(', ');
-                showToast(`Rejected ${config.model || 'LLM'} answer — ungrounded path(s): ${rejected}`, 'warn');
+
+            if (outcome.source === 'model' && outcome.rawText) {
+              const enriched = renderGroundedText(outcome.rawText, graph);
+              const cardEl = document.getElementById(cardId);
+              if (cardEl) {
+                cardEl.querySelector('.agent-synthesis-body').innerHTML = enriched;
               }
+            } else if (outcome.rejected) {
+              const rejected = (outcome.rejectedPaths || []).slice(0, 3).join(', ');
+              showToast(`Rejected ${config.model || 'LLM'} answer — ungrounded path(s): ${rejected}`, 'warn');
+            }
+          } else {
+            const allowedPaths = Array.from(plan.visitedFiles);
+            const sysPrompt = `You are the Cartograph Codebase Agent. You are ONLY allowed to cite files from this verified AST tool output list: ${JSON.stringify(allowedPaths)}. Explain the answer concisely in 3-4 sentences.`;
+            const userPrompt = `Question: ${question}\nVerified Tool Trace: ${JSON.stringify(plan.steps)}`;
+            const rawText = await modelClient.complete({ systemPrompt: sysPrompt, userPrompt });
+            if (state.graph !== graph) return;
+            if (rawText) {
+              const cardEl = document.getElementById(cardId);
+              if (cardEl) cardEl.querySelector('.agent-synthesis-body').textContent = rawText;
             }
           }
         } catch (err) {

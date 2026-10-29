@@ -33,7 +33,7 @@ that naming pattern.
 
 ## Coverage
 
-105 tests across ten files, grouped by the behavior they lock down.
+110 tests across ten files, grouped by the behavior they lock down.
 
 `test/parser.test.js` (11 cases) — parser and CLI:
 

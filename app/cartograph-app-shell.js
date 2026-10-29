@@ -175,61 +175,85 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
 
     async function ingestUploadedFileObjects(fileList) {
       if (!fileList.length) return;
-      // Detect both established snapshot forms before applying repository policy.
-      // A single JSON may also be ordinary repository data.
+
+      // 1. Snapshot discrimination via CartographIntake
       let singleText;
       if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.json')) {
         try { singleText = await fileList[0].text(); } catch (error) { /* Report via ordinary intake below. */ }
-        let parsed;
-        try { parsed = JSON.parse(singleText); } catch (error) { /* Ordinary JSON/source input. */ }
-        if (parsed && parsed.graph && Array.isArray(parsed.graph.nodes)) {
-          applyParsedGraph(parsed.graph, { kind: 'snapshot', scannedAt: parsed.scannedAt }, { customLabel: `snapshot: ${parsed.name || parsed.graph.name || fileList[0].name}` });
-          renderIntakeReport(parsed.graph.nodes.length, [], true);
-          showToast(`Loaded ${parsed.graph.nodes.length} parsed nodes from ${fileList[0].name}`);
+        const snapshot = typeof CartographIntake !== 'undefined' && CartographIntake.parseSnapshot
+          ? CartographIntake.parseSnapshot(singleText)
+          : null;
+        if (snapshot && snapshot.type === 'graph') {
+          applyParsedGraph(snapshot.graph, snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
+          renderIntakeReport(snapshot.count, [], true);
+          showToast(`Loaded ${snapshot.count} parsed nodes from ${fileList[0].name}`);
           return;
         }
-        if (parsed && Array.isArray(parsed.files)) {
-          parseRepositoryIntoGraph(parsed.files, parsed.name || 'imported-snapshot', 'Imported from Cartograph JSON snapshot', { kind: 'snapshot', scannedAt: parsed.scannedAt }, { customLabel: `snapshot: ${parsed.name || fileList[0].name}` });
-          renderIntakeReport(parsed.files.length, [], true);
-          showToast(`Loaded ${parsed.files.length} files from ${fileList[0].name}`);
+        if (snapshot && snapshot.type === 'files') {
+          parseRepositoryIntoGraph(snapshot.files, snapshot.name, 'Imported from Cartograph JSON snapshot', snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
+          renderIntakeReport(snapshot.count, [], true);
+          showToast(`Loaded ${snapshot.count} files from ${fileList[0].name}`);
           return;
         }
       }
 
+      // 2. Multi-file directory intake using CartographIntake session & root detector
       const relativePaths = fileList.map(file => (file.webkitRelativePath || '').replace(/\\/g, '/'));
-      const root = relativePaths[0].split('/')[0];
-      const sharedRoot = root && relativePaths.every(path => path.includes('/') && path.split('/')[0] === root);
-      const rootFolder = sharedRoot ? root : 'local-project';
+      const { sharedRoot, rootFolder, root } = typeof CartographIntake !== 'undefined' && CartographIntake.detectSharedRoot
+        ? CartographIntake.detectSharedRoot(relativePaths)
+        : (() => {
+            const r = relativePaths[0].split('/')[0];
+            const sr = r && relativePaths.every(path => path.includes('/') && path.split('/')[0] === r);
+            return { sharedRoot: sr, rootFolder: sr ? r : 'local-project', root: r };
+          })();
+
+      const session = typeof CartographIntake !== 'undefined' && CartographIntake.createIntakeSession
+        ? CartographIntake.createIntakeSession()
+        : null;
+
       const collected = [], skipped = [], seen = new Set(), reported = new Set();
       function skip(path, reason, directory = false) {
         const key = `${reason}:${path}`;
         if (!directory || !reported.has(key)) { skipped.push({ path, reason }); reported.add(key); }
       }
+
       for (let index = 0; index < fileList.length; index++) {
         const file = fileList[index];
         const rawPath = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
         const normalizedPath = (sharedRoot ? rawPath.slice(root.length + 1) : rawPath).split('/').filter(Boolean).join('/');
-        // Each webkitRelativePath root represents a selected folder, even in a mixed selection.
-        // Retain mixed root prefixes in graph/report paths, but classify only below that root.
         const hasSelectedRoot = relativePaths[index].includes('/');
         const policyPath = hasSelectedRoot ? rawPath.slice(rawPath.indexOf('/') + 1) : normalizedPath;
         const reportPrefix = hasSelectedRoot && !sharedRoot ? rawPath.slice(0, rawPath.indexOf('/') + 1) : '';
-        const decision = CartographIntake.checkFile(policyPath, file.size);
-        if (!decision.include) { skip(reportPrefix + decision.skippedPath, decision.reason, decision.skippedPath !== policyPath); continue; }
-        if (seen.has(normalizedPath)) { skip(normalizedPath, 'duplicate'); continue; }
-        seen.add(normalizedPath);
-        try {
-          const content = index === 0 && singleText !== undefined ? singleText : await file.text();
-          collected.push({ path: normalizedPath, content });
-        } catch (error) { skip(normalizedPath, 'unreadable'); }
+
+        if (session) {
+          const check = session.checkAndInclude(normalizedPath, policyPath, file.size, reportPrefix);
+          if (!check.included) continue;
+          try {
+            const content = index === 0 && singleText !== undefined ? singleText : await file.text();
+            session.recordIncluded({ path: normalizedPath, content });
+          } catch (error) {
+            session.recordSkipped(normalizedPath, 'unreadable');
+          }
+        } else {
+          const decision = CartographIntake.checkFile(policyPath, file.size);
+          if (!decision.include) { skip(reportPrefix + decision.skippedPath, decision.reason, decision.skippedPath !== policyPath); continue; }
+          if (seen.has(normalizedPath)) { skip(normalizedPath, 'duplicate'); continue; }
+          seen.add(normalizedPath);
+          try {
+            const content = index === 0 && singleText !== undefined ? singleText : await file.text();
+            collected.push({ path: normalizedPath, content });
+          } catch (error) { skip(normalizedPath, 'unreadable'); }
+        }
       }
-      renderIntakeReport(collected.length, skipped);
-      if (!collected.length) {
-        showToast(`No files included; existing map kept. ${skipped.length} entries skipped — open Last intake for reasons.`, 'warn');
+
+      const report = session ? session.getSummary() : { included: collected, skipped };
+      renderIntakeReport(report.included.length, report.skipped);
+      if (!report.included.length) {
+        showToast(`No files included; existing map kept. ${report.skipped.length} entries skipped — open Last intake for reasons.`, 'warn');
         return;
       }
-      parseRepositoryIntoGraph(collected, rootFolder, `Local folder loaded directly from disk (${collected.length} files)`, undefined, { customLabel: `local: ${rootFolder} (${collected.length} files)` });
-      showToast(`Parsed ${collected.length} local files from "${rootFolder}"${skipped.length ? `; ${skipped.length} entries skipped — open Last intake for reasons` : ''}`);
+      parseRepositoryIntoGraph(report.included, rootFolder, `Local folder loaded directly from disk (${report.included.length} files)`, undefined, { customLabel: `local: ${rootFolder} (${report.included.length} files)` });
+      showToast(`Parsed ${report.included.length} local files from "${rootFolder}"${report.skipped.length ? `; ${report.skipped.length} entries skipped — open Last intake for reasons` : ''}`);
     }
 
     // Relabels the preset dropdown with an opt-out "loaded from disk/server"
@@ -528,39 +552,83 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       lucide.createIcons();
     });
 
+    /**
+     * Unified navigation coordinator for Cartograph Local.
+     * Consolidates file selection, viewport centering, responsive pane switching,
+     * overlay dismissal, and accessible focus arbitration.
+     */
+    const CartographNavigation = {
+      navigateTo(path, options = {}) {
+        if (!state.graph.nodes.some(node => node.path === path)) return false;
+
+        const pan = options.pan !== undefined ? options.pan : true;
+        const fromOverlay = options.fromOverlay !== undefined ? options.fromOverlay : !!state.ui.overlay;
+        const source = options.source || (typeof document !== 'undefined' ? document.activeElement : null);
+        const sourcePath = source?.dataset?.filepath;
+
+        let sourceRegion = source?.parentElement;
+        while (sourceRegion && !sourceRegion.id) sourceRegion = sourceRegion.parentElement;
+
+        const visible = element => element && element.isConnected && !element.disabled && (element.getClientRects ? element.getClientRects().length : true);
+
+        if (typeof rememberFileListScroll === 'function') rememberFileListScroll();
+        if (fromOverlay && typeof closeUiOverlay === 'function') closeUiOverlay(false);
+        if (typeof switchMainView === 'function') switchMainView('explorer');
+
+        if (typeof selectFileNode === 'function') {
+          selectFileNode(path, pan);
+        }
+
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          let target;
+          if (window.innerWidth <= 640) {
+            if (typeof setPhonePane === 'function') setPhonePane('impact');
+            target = document.getElementById('panelInspectorContent');
+          } else if (window.innerWidth <= 1100) {
+            target = document.getElementById('dependencyCanvas');
+          } else if (!fromOverlay) {
+            if (visible(source) && source !== document.body && source !== document.documentElement
+              && source.matches && source.matches('button, input, select, textarea, a[href], [tabindex]')) {
+              target = source;
+            } else if (sourcePath && sourceRegion?.isConnected) {
+              target = Array.from(sourceRegion.querySelectorAll('[data-filepath]'))
+                .find(element => element.dataset.filepath === sourcePath && visible(element));
+            }
+          }
+          target = target || document.getElementById('mapRegion');
+          if (target && target.matches && !target.matches('button, input, select, textarea, a[href], [tabindex]')) {
+            target.tabIndex = -1;
+          }
+          if (target && typeof target.focus === 'function') {
+            target.focus();
+          }
+        }
+
+        return true;
+      },
+
+      centerOnNode(filePath) {
+        const node = state.graph.nodes.find(n => n.path === filePath);
+        if (!node) return false;
+        const canvas = document.getElementById('dependencyCanvas');
+        if (canvas) {
+          const cx = canvas.clientWidth / 2;
+          const cy = canvas.clientHeight / 2;
+          state.camera.x = cx - node.x * state.camera.zoom;
+          state.camera.y = cy - node.y * state.camera.zoom;
+          return true;
+        }
+        return false;
+      }
+    };
+
+    if (typeof globalThis !== 'undefined') globalThis.CartographNavigation = CartographNavigation;
+    else if (typeof window !== 'undefined') window.CartographNavigation = CartographNavigation;
+
     // User file jumps share validation, overlay ownership and responsive focus.
     // Internal agent selection intentionally continues to call selectFileNode.
     function selectFileFromUi(path, panToNode = true) {
-      if (!state.graph.nodes.some(node => node.path === path)) return;
-      const fromOverlay = !!state.ui.overlay;
-      const source = document.activeElement;
-      const sourcePath = source?.dataset?.filepath;
-      let sourceRegion = source?.parentElement;
-      while (sourceRegion && !sourceRegion.id) sourceRegion = sourceRegion.parentElement;
-      const visible = element => element && element.isConnected && !element.disabled && element.getClientRects().length;
-      // Closing a native dialog can reset its scroller before regions move home.
-      rememberFileListScroll();
-      if (fromOverlay) closeUiOverlay(false);
-      switchMainView('explorer');
-      selectFileNode(path, panToNode);
-      let target;
-      if (window.innerWidth <= 640) {
-        setPhonePane('impact');
-        target = document.getElementById('panelInspectorContent');
-      } else if (window.innerWidth <= 1100) {
-        target = document.getElementById('dependencyCanvas');
-      } else if (!fromOverlay) {
-        if (visible(source) && source !== document.body && source !== document.documentElement
-          && source.matches('button, input, select, textarea, a[href], [tabindex]')) target = source;
-        else if (sourcePath && sourceRegion?.isConnected) {
-          // Compare raw paths instead of interpolating a path into a CSS selector.
-          target = Array.from(sourceRegion.querySelectorAll('[data-filepath]'))
-            .find(element => element.dataset.filepath === sourcePath && visible(element));
-        }
-      }
-      target = target || document.getElementById('mapRegion');
-      if (!target.matches('button, input, select, textarea, a[href], [tabindex]')) target.tabIndex = -1;
-      target.focus();
+      return CartographNavigation.navigateTo(path, { pan: panToNode });
     }
 
     // Responsive regions move into the single native sheet, never clone their IDs or state.

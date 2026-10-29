@@ -107,3 +107,51 @@ test('each mixed selected root is exempt while nested excluded children are repo
  assert.match(b.elements.intakeStatus.textContent,/2 skipped/);
  assert.deepEqual(b.elements.intakeSkippedList.children.map(e=>e.textContent),['vendor/vendor — excluded-directory','.hidden/.cache — hidden']);
 });
+
+test('CartographIntake parseSnapshot discriminates graph and files formats and rejects invalid payloads', () => {
+  const intake = require('../lib/cartograph-intake.js');
+
+  // Direct graph snapshot
+  const graphSnap = JSON.stringify({
+    name: 'graph-repo',
+    scannedAt: '2026-10-29T00:00:00Z',
+    graph: { nodes: [{ path: 'a.js' }, { path: 'b.js' }], edges: [] },
+  });
+  const parsedGraph = intake.parseSnapshot(graphSnap);
+  assert.equal(parsedGraph.type, 'graph');
+  assert.equal(parsedGraph.count, 2);
+  assert.equal(parsedGraph.name, 'graph-repo');
+  assert.equal(parsedGraph.provenance.scannedAt, '2026-10-29T00:00:00Z');
+
+  // Files snapshot
+  const filesSnap = JSON.stringify({
+    name: 'files-repo',
+    files: [{ path: 'x.ts', content: '' }],
+  });
+  const parsedFiles = intake.parseSnapshot(filesSnap);
+  assert.equal(parsedFiles.type, 'files');
+  assert.equal(parsedFiles.count, 1);
+  assert.equal(parsedFiles.name, 'files-repo');
+
+  // Non-snapshot and malformed JSON
+  assert.equal(intake.parseSnapshot('{"x": 1}'), null);
+  assert.equal(intake.parseSnapshot('{not json'), null);
+  assert.equal(intake.parseSnapshot(null), null);
+});
+
+test('CartographIntake detectSharedRoot accurately identifies single root vs mixed roots', () => {
+  const intake = require('../lib/cartograph-intake.js');
+
+  const singleRoot = ['my-project/src/index.ts', 'my-project/package.json'];
+  const res1 = intake.detectSharedRoot(singleRoot);
+  assert.equal(res1.sharedRoot, true);
+  assert.equal(res1.rootFolder, 'my-project');
+
+  const mixedRoots = ['pkg-a/src/a.ts', 'pkg-b/src/b.ts'];
+  const res2 = intake.detectSharedRoot(mixedRoots);
+  assert.equal(res2.sharedRoot, false);
+  assert.equal(res2.rootFolder, 'local-project');
+
+  const empty = intake.detectSharedRoot([]);
+  assert.equal(empty.sharedRoot, false);
+});

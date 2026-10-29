@@ -9,6 +9,8 @@ const {
 const {
   buildAgentPlan,
   findAuthNodes,
+  createModelClient,
+  queryAgent,
 } = require('../lib/cartograph-agent.js');
 
 const SERVER = 'src/lib/db/supabase.ts';
@@ -550,4 +552,114 @@ test('the UI AGENT_TOOLS sample lists every canonical handler name', () => {
       `AGENT_TOOLS sample lists the canonical tool ${name}`
     );
   }
+});
+
+test('createModelClient supports OpenAI and Ollama formats with Bearer auth', async () => {
+  let capturedUrl = null;
+  let capturedHeaders = null;
+  let capturedBody = null;
+
+  const mockOpenAiFetch = async (url, init) => {
+    capturedUrl = url;
+    capturedHeaders = init.headers;
+    capturedBody = JSON.parse(init.body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          choices: [{ message: { content: 'Analysis based on src/lib/db/supabase.ts.' } }],
+        };
+      },
+    };
+  };
+
+  const client = createModelClient(
+    {
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      model: 'gpt-4o',
+      apiKey: 'secret-token-xyz',
+    },
+    mockOpenAiFetch
+  );
+
+  const text = await client.complete({ systemPrompt: 'System', userPrompt: 'User' });
+  assert.equal(text, 'Analysis based on src/lib/db/supabase.ts.');
+  assert.equal(capturedUrl, 'https://api.openai.com/v1/chat/completions');
+  assert.equal(capturedHeaders.Authorization, 'Bearer secret-token-xyz');
+  assert.equal(capturedBody.model, 'gpt-4o');
+  assert.equal(capturedBody.messages[0].content, 'System');
+
+  // Ollama response format
+  const mockOllamaFetch = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        message: { content: 'Ollama response for src/lib/auth/verify.ts.' },
+      };
+    },
+  });
+
+  const ollamaClient = createModelClient(
+    { endpoint: 'http://localhost:11434/api/chat', model: 'qwen2.5-coder:7b' },
+    mockOllamaFetch
+  );
+  const ollamaText = await ollamaClient.complete({ systemPrompt: 'Sys', userPrompt: 'Usr' });
+  assert.equal(ollamaText, 'Ollama response for src/lib/auth/verify.ts.');
+
+  // Error on non-ok status
+  const mockErrorFetch = async () => ({
+    ok: false,
+    status: 502,
+  });
+  const errorClient = createModelClient({ endpoint: 'http://localhost:11434/api/chat' }, mockErrorFetch);
+  await assert.rejects(
+    async () => errorClient.complete({ systemPrompt: '', userPrompt: '' }),
+    /Endpoint returned 502/
+  );
+});
+
+test('queryAgent executes deterministic planning and model synthesis validation', async () => {
+  const graph = buildFixtureGraph();
+
+  // 1. Deterministic mode returns pure AST plan
+  const deterministicResult = await queryAgent(
+    'Where is authentication enforced?',
+    graph,
+    { chipFormatter: chip, config: { engine: 'deterministic' } }
+  );
+  assert.equal(deterministicResult.source, 'deterministic');
+  assert.equal(deterministicResult.primaryFocus, VERIFY);
+  assert.ok(deterministicResult.visitedFiles.includes(VERIFY));
+
+  // 2. Model client with grounded citations accepted
+  const groundedClient = {
+    async complete() {
+      return `Authentication is verified in ${VERIFY} and imported by ${ROUTES}.`;
+    },
+  };
+  const acceptedResult = await queryAgent(
+    'Where is authentication enforced?',
+    graph,
+    { chipFormatter: chip, modelClient: groundedClient }
+  );
+  assert.equal(acceptedResult.source, 'model');
+  assert.ok(acceptedResult.validation.accepted);
+  assert.deepEqual(acceptedResult.validation.unknownPaths, []);
+
+  // 3. Model client with hallucinated paths rejected with deterministic fallback
+  const hallucinatedClient = {
+    async complete() {
+      return `Authentication is handled in src/services/fake_auth.ts and ${VERIFY}.`;
+    },
+  };
+  const rejectedResult = await queryAgent(
+    'Where is authentication enforced?',
+    graph,
+    { chipFormatter: chip, modelClient: hallucinatedClient }
+  );
+  assert.equal(rejectedResult.source, 'deterministic');
+  assert.equal(rejectedResult.rejected, true);
+  assert.ok(rejectedResult.rejectedPaths.includes('src/services/fake_auth.ts'));
 });

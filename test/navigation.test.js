@@ -50,3 +50,13 @@ test('desktop canvas origin with body active falls back to Map without making bo
 test('desktop navigation retains a surviving focused control',()=>{
  const h=harness(),button=h.document.getElementById('commandsLauncher');h.document.activeElement=button;h.mouse('mousedown',20,20);h.mouse('mouseup',20,20);assert.equal(h.document.activeElement,button);
 });
+
+test('CartographNavigation navigateTo centralizes file selection and rejects unknown paths', () => {
+ const h = harness();
+ const success = h.run("CartographNavigation.navigateTo('src/a.js', { pan: true })");
+ assert.equal(success, true);
+ assert.equal(h.s.selectedFile, 'src/a.js');
+
+ const failure = h.run("CartographNavigation.navigateTo('src/unknown.js')");
+ assert.equal(failure, false);
+});

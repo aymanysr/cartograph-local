@@ -72,6 +72,31 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
   10. **S6 (Documentation Alignment)**: Updated [`lib/README.md`](lib/README.md) (5 shared modules) and [`test/README.md`](test/README.md) (105 tests across 10 suites).
 - **Verification:** 105/105 tests passing, zero card overlaps across all preset topologies, and verified live in Orca browser.
 
+#### ADR-005: Deep Modular Architecture & Encapsulated Seams
+- **Status:** Accepted & Implemented (2026-10-29)
+- **Motivation:**
+  Following the architectural survey of shallow modules and leaked seams across lib/, app/, and cli/, four architectural deepening opportunities were identified and orchestrated into production.
+- **Architectural Seams Implemented:**
+  1. **Candidate 3: Pluggable Agent Model Client Seam (`lib/cartograph-agent.js`)**:
+     - Extracted inline HTTP fetch, chat schema formatting, Bearer authentication, and dual-format response unmarshaling (Ollama `data.message.content` and OpenAI `data.choices[0].message.content`) behind `createModelClient(config, customFetch)`.
+     - Introduced `queryAgent(question, graph, options)` which orchestrates the deterministic planner, queries the model client, validates citations against the AST trace via `validateSynthesis`, and returns a verified grounded answer or safe deterministic fallback.
+     - Fully testable in pure Node.js without browser DOM mocks.
+  2. **Candidate 2: Unified Repository Ingestion Pipeline (`lib/cartograph-intake.js`)**:
+     - Deepened `CartographIntake` beyond basic path classification to encapsulate snapshot discrimination (`parseSnapshot`), common-root path detection and stripping (`detectSharedRoot`), and intake session state tracking (`createIntakeSession`).
+     - Consolidated duplicate file handling, skip reasoning, and excluded-directory collapsing into a reusable domain object shared by CLI and browser.
+  3. **Candidate 1: Encapsulated Application & Graph Store (`app/cartograph-graph-state.js`)**:
+     - Encapsulated reactive state behind `CartographStore` (`createGraphStore`) with explicit action dispatchers (`loadGraph`, `setLayout`, `setFilter`, `setSimulation`, `updateCamera`, `fit`) and subscriber notifications (`subscribe`).
+     - Removed 100+ lines of dead, unconstrained legacy force simulation code that had been superseded by `CartographLayouts`.
+     - Preserved backwards-compatible `state` property access for existing harnesses and components.
+  4. **Candidate 4: Unified Navigation & Selection Coordinator (`app/cartograph-app-shell.js`)**:
+     - Introduced `CartographNavigation` coordinator (`navigateTo(path, options)` and `centerOnNode(path)`) unifying all 7 file selection triggers across the UI (canvas cards, inline citations, command palette, hotspot alerts, and agent queries).
+     - Centralizes responsive mobile sheet switching, viewport camera centering, overlay dismissal, and accessible DOM focus arbitration with raw codepoint comparison.
+- **Verification:**
+  - 110/110 tests passing across all 10 suites (`node --test`).
+  - Deterministic CLI scan verified (`node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json`).
+  - Real-browser live UI reactivity verified in Orca browser.
+
+
 
 
 

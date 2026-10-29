@@ -181,7 +181,7 @@ Expected: `2 1` followed by an edge from `src/a.ts` to `src/b.ts`.
 | File | Role |
 | --- | --- |
 | `cartograph-parser.js` | The complete deterministic parser and graph builder |
-| `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), and `validateSynthesis`, the LLM-output gate rejecting paths outside the graph or the visible tool trace |
+| `cartograph-agent.js` | DOM-free agent tool executor: the `TOOLS` handler registry (six pure `run(args, graph) -> { output, files }` handlers with display `label`s), `buildAgentPlan` (routes a repository question onto concrete call arguments, executes every call against the registry, and returns steps, visited files, highlighted edges, and cited paths), `findAuthNodes` (routing input, also used by evals), `validateSynthesis` (the LLM-output gate rejecting paths outside the graph or the visible tool trace), `createModelClient` (pluggable model client factory with Bearer auth and dual Ollama/OpenAI unmarshaling), and `queryAgent` (end-to-end question planning and synthesis verification seam) |
 | `cartograph-evals.js` | DOM-free complete suite runner (`evaluateSuite`) and eval scorer (`scoreCase`, `computeSuiteSummary`, `collectTraceFiles`) plus the graph-derived benchmark cases (`buildBenchmarkCases`); see the eval-scorer contract below |
 | `cartograph-fit.js` | DOM-free fit-camera math (`computeFitCamera`): pure UMD like the parser — browser global `CartographFit`, Node `module.exports` — used by `app/cartograph-graph-state.js` to frame the graph inside the canvas; covered by `test/fit.test.js` (fit-camera contract below) |
 | `cartograph-layouts.js` | Pure mathematical layout engine (`computeTopologicalLR`, `computeTopologicalTB`, `computeDirectoryClusterBox`, `findBackEdges`, `computeTopologicalRanks`, `getEffectiveDirectory`, `separateNodeCards`): pure UMD — browser global `CartographLayouts`, Node `module.exports` — provides deterministic DAG layering and rigid AABB minimum-penetration separation for zero-card collisions; covered by `test/layouts.test.js` |
@@ -207,12 +207,10 @@ Architectural rules that constrain this module live in
 [`../PROJECT.md`](../PROJECT.md) and [`../CLAUDE.md`](../CLAUDE.md). Phase
 requirements are in [`../specs/phase-01-parser.md`](../specs/phase-01-parser.md).
 
-## Repository intake policy
+## Repository intake policy and pipeline
 
-`cartograph-intake.js` is a DOM-free classic/CommonJS module exposing
-`checkDirectory(path)` and `checkFile(path, byteLength)`. Both return
-`{ include, reason, skippedPath }`; reasons are `hidden`, `excluded-directory`,
-`unsupported`, or `too-large`. Paths are repository-relative, separators are
-normalized, exclusions match whole segments, and 500,000 bytes is included.
-Readers own root stripping, I/O, duplicate/unreadable reporting and snapshots.
-Snapshots bypass this policy. See the root README for the fixed intake scope.
+`cartograph-intake.js` is a DOM-free classic/CommonJS module exposing:
+- `checkDirectory(path)` and `checkFile(path, byteLength)`: Both return `{ include, reason, skippedPath }`; reasons are `hidden`, `excluded-directory`, `unsupported`, or `too-large`. Paths are repository-relative, separators are normalized, exclusions match whole segments, and 500,000 bytes is included.
+- `parseSnapshot(jsonStringOrObject)`: Discriminated parser recognizing direct parsed graph snapshots (`{ graph: { nodes, edges } }`) and raw files snapshots (`{ files: [...] }`), returning typed snapshot metadata.
+- `detectSharedRoot(relativePaths)`: Pure detection and stripping of shared repository root directories.
+- `createIntakeSession()`: Encapsulates intake session state, duplicate checking, excluded-directory collapsing, and skip reasons counting.

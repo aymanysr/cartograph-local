@@ -143,110 +143,16 @@
         return;
       }
 
-      const canvas = document.getElementById('dependencyCanvas');
-      const width = (canvas && canvas.clientWidth) ? canvas.clientWidth : 860;
-      const height = (canvas && canvas.clientHeight) ? canvas.clientHeight : 600;
-
-      if (state.graphLayout === 'dag') {
-        const rankBuckets = { 0: [], 1: [], 2: [], 3: [], 4: [] };
-        nodes.forEach(n => {
-          const rank = getLayerMeta(n.layer).rank;
-          rankBuckets[rank].push(n);
-        });
-
-        const activeRanks = Object.keys(rankBuckets)
-          .map(Number)
-          .filter(r => rankBuckets[r].length > 0)
-          .sort((a, b) => a - b);
-
-        activeRanks.forEach((rankVal, rowIdx) => {
-          const rowNodes = rankBuckets[rankVal];
-          rowNodes.sort((a, b) => b.totalImpact - a.totalImpact || a.path.localeCompare(b.path));
-          rowNodes.forEach((node, colIdx) => {
-            node.x = (colIdx - (rowNodes.length - 1) / 2) * 216;
-            node.y = rowIdx * 96;
-          });
-        });
-      } else {
-        const cx = width / 2;
-        const cy = height / 2;
-        nodes.forEach((n, idx) => {
-          const angle = (idx / nodes.length) * Math.PI * 2;
-          const radius = Math.min(width, height) * 0.32;
-          n.x = cx + Math.cos(angle) * radius;
-          n.y = cy + Math.sin(angle) * radius;
-          n.vx = 0;
-          n.vy = 0;
-        });
-
-        const nodeMap = new Map(nodes.map(n => [n.path, n]));
-        for (let iter = 0; iter < 140; iter++) {
-          for (let i = 0; i < nodes.length; i++) {
-            for (let j = i + 1; j < nodes.length; j++) {
-              const a = nodes[i];
-              const b = nodes[j];
-              let dx = b.x - a.x;
-              let dy = b.y - a.y;
-              let distSq = dx * dx + dy * dy + 1;
-              let dist = Math.sqrt(distSq);
-              const force = 18000 / distSq;
-              const fx = (dx / dist) * force;
-              const fy = (dy / dist) * force;
-              a.vx -= fx;
-              a.vy -= fy;
-              b.vx += fx;
-              b.vy += fy;
-            }
-          }
-          for (const e of edges) {
-            const s = nodeMap.get(e.source);
-            const t = nodeMap.get(e.target);
-            if (!s || !t) continue;
-            const dx = t.x - s.x;
-            const dy = t.y - s.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const targetDist = 155;
-            const force = (dist - targetDist) * 0.035;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            s.vx += fx;
-            s.vy += fy;
-            t.vx -= fx;
-            t.vy -= fy;
-          }
-          for (const n of nodes) {
-            n.vx += (cx - n.x) * 0.012;
-            n.vy += (cy - n.y) * 0.012;
-            n.x += n.vx * 0.25;
-            n.y += n.vy * 0.25;
-            n.vx *= 0.65;
-            n.vy *= 0.65;
-          }
-        }
-      }
-
-      if (state.graphLayout === 'force') separateGraphNodeCards(nodes);
+      // Sane fallback positioning if CartographLayouts is not present
+      nodes.forEach((n, idx) => {
+        n.x = (idx % 6) * 216;
+        n.y = Math.floor(idx / 6) * 96;
+      });
       fitGraphToCanvas();
     }
 
     function getGraphNodeBounds(node) {
       return { minX: node.x - 96, minY: node.y - 24, maxX: node.x + 96, maxY: node.y + 24 };
-    }
-
-    function separateGraphNodeCards(nodes) {
-      for (let pass = 0; pass < 32; pass++) {
-        let overlap = false;
-        for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i], b = nodes[j];
-          const dx = b.x - a.x, dy = b.y - a.y;
-          const px = 204 - Math.abs(dx), py = 60 - Math.abs(dy);
-          if (px <= 0 || py <= 0) continue;
-          overlap = true;
-          if (px <= py) { const shift = (px / 2 + .01) * (Math.sign(dx) || 1); a.x -= shift; b.x += shift; }
-          else { const shift = (py / 2 + .01) * (Math.sign(dy) || 1); a.y -= shift; b.y += shift; }
-        }
-        if (!overlap) break;
-      }
     }
 
     function fitGraphToCanvas() {
@@ -276,4 +182,87 @@
       }
       return 'neutral';
     }
+
+    /**
+     * Encapsulated store for Cartograph application state.
+     * Provides subscription notifications and explicit action dispatchers.
+     */
+    function createGraphStore(targetState) {
+      const listeners = new Set();
+      const s = targetState;
+
+      function notify(event = {}) {
+        for (const listener of listeners) {
+          try {
+            listener(s, event);
+          } catch (err) {
+            console.error('Store listener error:', err);
+          }
+        }
+      }
+
+      function subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+
+      function getState() {
+        return s;
+      }
+
+      function loadGraph(graph, provenance, options) {
+        applyParsedGraph(graph, provenance, options);
+        notify({ type: 'loadGraph', graph, provenance, options });
+      }
+
+      function setLayout(mode) {
+        s.graphLayout = mode;
+        computeGraphNodePositions();
+        notify({ type: 'layout', mode });
+      }
+
+      function setFilter(updates = {}) {
+        if (updates.layerFilter !== undefined) s.layerFilter = updates.layerFilter;
+        if (updates.searchQuery !== undefined) s.searchQuery = updates.searchQuery;
+        if (updates.fileSortMode !== undefined) s.fileSortMode = updates.fileSortMode;
+        if (typeof renderFileListSidebar === 'function') renderFileListSidebar();
+        notify({ type: 'filter', updates });
+      }
+
+      function setSimulation({ breaking, isolate } = {}) {
+        if (breaking !== undefined) s.simulateBreakingChange = breaking;
+        if (isolate !== undefined) s.isolateBlastRadius = isolate;
+        if (typeof syncCanvasToggleState === 'function') syncCanvasToggleState();
+        notify({ type: 'simulation', breaking, isolate });
+      }
+
+      function updateCamera(updates = {}) {
+        Object.assign(s.camera, updates);
+        notify({ type: 'camera', camera: s.camera });
+      }
+
+      function fit() {
+        const result = fitGraphToCanvas();
+        notify({ type: 'fit', camera: s.camera });
+        return result;
+      }
+
+      return {
+        state: s,
+        getState,
+        subscribe,
+        loadGraph,
+        setLayout,
+        setFilter,
+        setSimulation,
+        updateCamera,
+        fit,
+        notify,
+      };
+    }
+
+    const CartographStore = createGraphStore(state);
+    if (typeof globalThis !== 'undefined') globalThis.CartographStore = CartographStore;
+    else if (typeof window !== 'undefined') window.CartographStore = CartographStore;
 
