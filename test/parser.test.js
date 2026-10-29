@@ -375,3 +375,71 @@ test('CLI scans a folder into a parsed graph and prints a blast-radius report', 
     fs.rmSync(fixtureDir, { recursive: true, force: true });
   }
 });
+
+test('CartographParser returns encapsulated CartographGraph with deep query methods (ADR-006)', () => {
+  const files = [
+    { path: 'src/core/db.ts', content: 'export const db = 1;' },
+    { path: 'src/auth/verify.ts', content: "import { db } from '../core/db';\nexport function verifyToken() {}" },
+    { path: 'src/api/routes.ts', content: "import { verifyToken } from '../auth/verify';\nexport function handle() {}" },
+    { path: 'src/ui/app.tsx', content: "import { handle } from '../api/routes';\nexport default function App() {}" },
+  ];
+
+  const graph = parseRepository(files, { repoName: 'deep-test-repo' });
+
+  // 1. Backward-compatible properties
+  assert.equal(graph.name, 'deep-test-repo');
+  assert.equal(graph.nodes.length, 4);
+  assert.equal(graph.edges.length, 3);
+  assert.ok(Array.isArray(graph.cycles));
+  assert.ok(Array.isArray(graph.unresolved));
+
+  // 2. getNode and hasNode O(1) lookups
+  assert.equal(graph.hasNode('src/core/db.ts'), true);
+  assert.equal(graph.hasNode('nonexistent.ts'), false);
+  const dbNode = graph.getNode('src/core/db.ts');
+  assert.ok(dbNode);
+  assert.equal(dbNode.path, 'src/core/db.ts');
+  assert.equal(graph.getNode('SRC/CORE/DB.TS')?.path, 'src/core/db.ts', 'Case-insensitive lookup supported');
+
+  // 3. getTopHubs
+  const topHubs = graph.getTopHubs(2);
+  assert.equal(topHubs.length, 2);
+  assert.equal(topHubs[0].path, 'src/core/db.ts'); // Has 3 transitive dependents
+
+  // 4. getBlastRadius (2-hop canonical radius)
+  const blast = graph.getBlastRadius('src/core/db.ts');
+  assert.equal(blast.totalImpact, 2);
+  assert.deepEqual(blast.hop1Files, ['src/auth/verify.ts']);
+  assert.deepEqual(blast.hop2Files, ['src/api/routes.ts']);
+
+  // 5. getAuthNodes
+  const authNodes = graph.getAuthNodes();
+  assert.equal(authNodes.length, 1);
+  assert.equal(authNodes[0].path, 'src/auth/verify.ts');
+
+  // 6. findExplicitNode
+  assert.equal(graph.findExplicitNode('what happens if db.ts changes')?.path, 'src/core/db.ts');
+  assert.equal(graph.findExplicitNode('unrelated text'), null);
+
+  // 7. Layers & Filtering
+  assert.ok(graph.getLayers().includes('core'));
+  assert.ok(graph.getLayers().includes('api'));
+  const coreNodes = graph.getNodesInLayer('core');
+  assert.equal(coreNodes.length, 1);
+  assert.equal(coreNodes[0].path, 'src/core/db.ts');
+
+  const searchResults = graph.filterByQuery('verify');
+  assert.equal(searchResults.length, 1);
+  assert.equal(searchResults[0].path, 'src/auth/verify.ts');
+
+  // 8. Summary & Snapshot
+  const summary = graph.getSummary();
+  assert.equal(summary.nodeCount, 4);
+  assert.equal(summary.edgeCount, 3);
+  assert.equal(summary.cycleCount, 0);
+  assert.equal(summary.topHub?.path, 'src/core/db.ts');
+
+  const snapshot = graph.exportSnapshot();
+  assert.equal(snapshot.name, 'deep-test-repo');
+  assert.equal(snapshot.graph.nodes.length, 4);
+});

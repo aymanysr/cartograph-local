@@ -94,9 +94,31 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
 - **Verification:**
   - 110/110 tests passing across all 10 suites (`node --test`).
   - Deterministic CLI scan verified (`node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json`).
-  - Real-browser live UI reactivity verified in Orca browser.
-
-
-
+  - Real-browser live UI reactivity verified in Orca browser.#### ADR-006: CartographGraph Encapsulated Deep Query Facade
+- **Status:** Accepted & Implemented (2026-10-29)
+- **Motivation:**
+  `lib/cartograph-parser.js` previously functioned as a procedural record builder that emitted raw arrays (`nodes`, `edges`, `cycles`, `unresolved`). Downstream consumers (`cli/cartograph-scan.mjs`, `lib/cartograph-agent.js`, `lib/cartograph-evals.js`, and `app/cartograph-graph-state.js`) repeatedly reimplemented ad-hoc graph traversals, O(N) array scans for node lookups, and manual hotspot sorting. This leaked graph querying logic across multiple layers.
+- **Architectural Seams Implemented:**
+  1. **Encapsulated `CartographGraph` (`lib/cartograph-parser.js`)**:
+     - Introduced `createGraph(graphData)` facade returned directly by `CartographParser.parseRepository(files, options)`.
+     - Maintains 100% backward compatibility for all property accesses (`.nodes`, `.edges`, `.cycles`, `.unresolved`, `.name`, `.description`).
+     - Provides O(1) indexed lookups: `getNode(path)` and `hasNode(path)`.
+     - Encapsulates domain graph queries:
+       - `getTopHubs(count = 10)`: Pre-sorted ranking of blast-radius hotspots.
+       - `getBlastRadius(path)`: Canonical 2-hop impact computation returning 1-hop callers, 2-hop transitive callers, outbound imports, and total impact.
+       - `getAuthNodes()`: Discovers authentication, session, and cryptographic guardrail nodes.
+       - `findExplicitNode(query)`: Locates nodes explicitly mentioned in natural language questions.
+       - `getLayers()` & `getNodesInLayer(layer)`: Partitioned layer queries.
+       - `filterByQuery(query)`: Multi-token filtering over paths and exports.
+       - `hasCycles()`: Fast boolean cycle predicate.
+       - `getSummary()`: High-level architectural metrics.
+       - `exportSnapshot()`: Serializes clean snapshot format.
+  2. **Consumer Adoption**:
+     - **CLI Scanner (`cli/cartograph-scan.mjs`)**: Uses `graph.getTopHubs(args.top)` and `graph.getNode(focusFile)` for hotspot reports.
+     - **Agent Engine (`lib/cartograph-agent.js`)**: Uses `graph.getAuthNodes()`, `graph.getTopHubs()`, and `graph.findExplicitNode()` for deterministic plan routing and cycle analysis.
+     - **Evaluation Suite (`lib/cartograph-evals.js`)**: Uses `graph.getTopHubs(1)[0]`, `graph.getAuthNodes()`, `graph.getNodesInLayer()`, and O(1) `graph.hasNode(path)` during benchmark scoring.
+- **Verification:**
+  - 122/122 tests passing across all suites (`node --test`).
+  - Automated headless Playwright end-to-end browser suite passed with 0 console errors, 100% groundedness, and 100% recall.
 
 

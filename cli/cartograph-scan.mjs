@@ -120,12 +120,13 @@ function parseArgs(argv) {
 }
 
 function printBlastRadiusReport(graph, focusFile, topN = 10) {
-  const ranked = [...graph.nodes].sort(
-    (a, b) => b.totalImpact - a.totalImpact || b.inDegree - a.inDegree || a.path.localeCompare(b.path)
-  );
+  const top = typeof graph.getTopHubs === 'function'
+    ? graph.getTopHubs(topN)
+    : [...graph.nodes].sort(
+        (a, b) => b.totalImpact - a.totalImpact || b.inDegree - a.inDegree || a.path.localeCompare(b.path)
+      ).slice(0, Math.min(topN, graph.nodes.length));
 
   console.log('\nTop blast-radius hotspots:');
-  const top = ranked.slice(0, Math.min(topN, ranked.length));
   if (top.length === 0) {
     console.log('  (no files scanned)');
   }
@@ -159,10 +160,13 @@ function printBlastRadiusReport(graph, focusFile, topN = 10) {
   }
 
   if (focusFile) {
-    const node =
-      graph.nodes.find((candidate) => candidate.path === focusFile) ||
-      graph.nodes.find((candidate) => candidate.path.endsWith('/' + focusFile)) ||
-      graph.nodes.find((candidate) => candidate.path.endsWith(focusFile));
+    const node = (typeof graph.getNode === 'function' && typeof graph.findExplicitNode === 'function')
+      ? (graph.getNode(focusFile) || graph.findExplicitNode(focusFile))
+      : (
+          graph.nodes.find((candidate) => candidate.path === focusFile) ||
+          graph.nodes.find((candidate) => candidate.path.endsWith('/' + focusFile)) ||
+          graph.nodes.find((candidate) => candidate.path.endsWith(focusFile))
+        );
 
     if (!node) {
       console.log(`\n[Cartograph CLI] File not found in graph: ${focusFile}`);
