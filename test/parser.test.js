@@ -442,4 +442,11 @@ test('CartographParser returns encapsulated CartographGraph with deep query meth
   const snapshot = graph.exportSnapshot();
   assert.equal(snapshot.name, 'deep-test-repo');
   assert.equal(snapshot.graph.nodes.length, 4);
+
+  // 9. Entry Points
+  const entryPoints = graph.getEntryPoints();
+  assert.equal(entryPoints.length, 1);
+  assert.equal(entryPoints[0].path, 'src/ui/app.tsx');
+  assert.equal(graph.isEntryPoint('src/ui/app.tsx'), true);
+  assert.equal(graph.isEntryPoint('src/core/db.ts'), false);
 });

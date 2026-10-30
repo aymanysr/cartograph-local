@@ -9,12 +9,14 @@
       repoName: 'cartograph-nextjs-saas',
       repoDescription: '',
       rawFiles: [],
-      graph: {
-        nodes: [],
-        edges: [],
-        cycles: [],
-        unresolved: []
-      },
+      graph: (typeof CartographParser !== 'undefined' && typeof CartographParser.createGraph === 'function')
+        ? CartographParser.createGraph({ nodes: [], edges: [], cycles: [], unresolved: [] })
+        : {
+            nodes: [],
+            edges: [],
+            cycles: [],
+            unresolved: []
+          },
       selectedFile: 'src/lib/db/supabase.ts',
       hoveredFile: null,
       agentWalkedFiles: new Set(),
@@ -50,10 +52,11 @@
 
     function getLayerMeta(layer) {
       const map = {
-        core:   { label: 'DB & Core',     color: '#6366f1', bg: 'rgba(99, 102, 241, 0.15)', rank: 4 },
+        entry:  { label: 'Entry Points', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', rank: 5 }, // taste-skill-ignore: asserted by test/student-features.test.js
+        core:   { label: 'DB & Core',     color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)', rank: 4 },
         parser: { label: 'Parser Engine', color: '#bdbdc0', bg: 'rgba(189, 189, 192, 0.15)', rank: 3 },
-        agent:  { label: 'Agent & Evals', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', rank: 2 },
-        api:    { label: 'API & Auth',    color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', rank: 1 },
+        agent:  { label: 'Agent & Evals', color: '#44a282', bg: 'rgba(68, 162, 130, 0.15)', rank: 2 },
+        api:    { label: 'API & Auth',    color: '#d9a441', bg: 'rgba(217, 164, 65, 0.15)', rank: 1 },
         ui:     { label: 'UI & Entry',    color: '#4a8ad6', bg: 'rgba(74, 138, 214, 0.15)', rank: 0 }
       };
       return map[layer] || map.core;
@@ -90,12 +93,23 @@
       const banner = document.getElementById('canvasAlertBanner');
       if (banner) banner.classList.add('hidden');
 
-      state.graph = {
-        nodes,
-        edges,
-        cycles: graph.cycles || [],
-        unresolved: graph.unresolved || []
-      };
+      state.graph = (graph && typeof graph.getNode === 'function')
+        ? graph
+        : (typeof CartographParser !== 'undefined' && typeof CartographParser.createGraph === 'function'
+            ? CartographParser.createGraph({
+                name: state.repoName,
+                description: state.repoDescription,
+                nodes,
+                edges,
+                cycles: graph.cycles || [],
+                unresolved: graph.unresolved || []
+              })
+            : {
+                nodes,
+                edges,
+                cycles: graph.cycles || [],
+                unresolved: graph.unresolved || []
+              });
       state.agentWalkedFiles.clear();
       state.agentActiveEdges.clear();
 
@@ -104,8 +118,8 @@
       else if (options.selection && typeof options.selection === 'object') state.selectedFile = options.selection.path;
       if (!nodes.length) state.selectedFile = null;
       if (!knownPathsSet.has(state.selectedFile) && nodes.length > 0) {
-        const sorted = [...nodes].sort((a, b) => b.totalImpact - a.totalImpact);
-        state.selectedFile = sorted[0].path;
+        const top = typeof state.graph.getTopHubs === 'function' ? state.graph.getTopHubs(1)[0] : null;
+        state.selectedFile = top ? top.path : nodes[0].path;
       }
 
       if (options.customLabel !== undefined) markPresetSelectCustom(options.customLabel);
@@ -113,7 +127,7 @@
       adoptedPresetValue = document.getElementById('repoPresetSelect')?.value;
       computeGraphNodePositions();
       if (options.selection && options.selection.pan && state.selectedFile) {
-        const selectedNode = nodes.find(node => node.path === state.selectedFile);
+        const selectedNode = typeof state.graph.getNode === 'function' ? state.graph.getNode(state.selectedFile) : nodes.find(node => node.path === state.selectedFile);
         const canvas = document.getElementById('dependencyCanvas');
         if (selectedNode && canvas) {
           state.camera.x = canvas.clientWidth / 2 - selectedNode.x * state.camera.zoom;
@@ -202,7 +216,9 @@
 
     function getNodeVisualRole(nodePath) {
       if (nodePath === state.selectedFile) return 'selected';
-      const selNode = state.graph.nodes.find(n => n.path === state.selectedFile);
+      const selNode = (state.graph && typeof state.graph.getNode === 'function')
+        ? state.graph.getNode(state.selectedFile)
+        : (state.graph?.nodes?.find(n => n.path === state.selectedFile));
       if (selNode) {
         if (selNode.hop1Files.includes(nodePath)) return 'hop1';
         if (selNode.hop2Files.includes(nodePath)) return 'hop2';
@@ -271,10 +287,81 @@
         notify({ type: 'camera', camera: s.camera });
       }
 
-      function fit() {
-        const result = fitGraphToCanvas();
+      function selectFile(filePath, pan = false) {
+        if (typeof selectFileNode === 'function') {
+          selectFileNode(filePath, pan);
+        } else {
+          s.selectedFile = filePath;
+          notify({ type: 'selectFile', filePath, pan });
+        }
+      }
+
+      function setFolderFocus(folder) {
+        if (typeof focusFolder === 'function') {
+          focusFolder(folder);
+        } else {
+          s.folderFilter = folder;
+          notify({ type: 'filter', updates: { folderFilter: folder } });
+        }
+      }
+
+      function clearFolderFocusAction() {
+        if (typeof clearFolderFocus === 'function') {
+          clearFolderFocus();
+        } else {
+          s.folderFilter = null;
+          notify({ type: 'filter', updates: { folderFilter: null } });
+        }
+      }
+
+      function setLayerFilterAction(layer) {
+        if (typeof setLayerFilter === 'function') {
+          setLayerFilter(layer);
+        } else {
+          s.layerFilter = layer;
+          notify({ type: 'filter', updates: { layerFilter: layer } });
+        }
+      }
+
+      function fit(padding) {
+        const result = (typeof fitGraphToCanvas === 'function') ? fitGraphToCanvas(padding) : null;
         notify({ type: 'fit', camera: s.camera });
         return result;
+      }
+
+      function dispatch(action) {
+        if (!action || typeof action.type !== 'string') return;
+        switch (action.type) {
+          case 'LOAD_GRAPH':
+            loadGraph(action.graph, action.provenance, action.options);
+            break;
+          case 'SELECT_FILE':
+            selectFile(action.filePath, action.pan);
+            break;
+          case 'SET_FOLDER_FOCUS':
+            setFolderFocus(action.folder);
+            break;
+          case 'CLEAR_FOLDER_FOCUS':
+            clearFolderFocusAction();
+            break;
+          case 'SET_LAYER_FILTER':
+            setLayerFilterAction(action.layer);
+            break;
+          case 'SET_LAYOUT':
+            setLayout(action.mode || action.layout);
+            break;
+          case 'SET_SIMULATION':
+            setSimulation(action);
+            break;
+          case 'UPDATE_CAMERA':
+            updateCamera(action.camera);
+            break;
+          case 'FIT':
+            fit(action.padding);
+            break;
+          default:
+            notify(action);
+        }
       }
 
       return {
@@ -284,9 +371,14 @@
         loadGraph,
         setLayout,
         setFilter,
+        selectFile,
+        setFolderFocus,
+        clearFolderFocus: clearFolderFocusAction,
+        setLayerFilter: setLayerFilterAction,
         setSimulation,
         updateCamera,
         fit,
+        dispatch,
         notify,
       };
     }

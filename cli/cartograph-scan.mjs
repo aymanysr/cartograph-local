@@ -17,6 +17,7 @@ import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import CartographParser from '../lib/cartograph-parser.js';
 import CartographIntake from '../lib/cartograph-intake.js';
+import CartographSpecs from '../lib/cartograph-specs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,6 +94,8 @@ function parseArgs(argv) {
     servePort: null,
     focusFile: null,
     top: 10,
+    generateSpecs: false,
+    specsDir: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -112,6 +115,11 @@ function parseArgs(argv) {
     } else if (arg === '--top' && argv[i + 1]) {
       const top = parseInt(argv[++i], 10);
       if (!Number.isNaN(top) && top > 0) args.top = top;
+    } else if (arg === '--specs') {
+      args.generateSpecs = true;
+      if (argv[i + 1] && !argv[i + 1].startsWith('--')) {
+        args.specsDir = argv[++i];
+      }
     } else if (!arg.startsWith('--')) {
       args.targetDir = path.resolve(arg);
     }
@@ -269,6 +277,20 @@ function main() {
       `(${graph.cycles.length} cycles, ${graph.unresolved.length} unresolved imports)`
   );
   console.log(`[Cartograph CLI] Snapshot written to ${outPath}`);
+
+  if (args.generateSpecs) {
+    const specs = CartographSpecs.generateSpecDocs(graph, {
+      repoName: path.basename(args.targetDir) || 'local-repository',
+      repoDescription: `Deterministic scan of ${args.targetDir}`,
+    });
+    const specsDir = args.specsDir ? path.resolve(process.cwd(), args.specsDir) : args.targetDir;
+    if (!fs.existsSync(specsDir)) {
+      fs.mkdirSync(specsDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(specsDir, 'PROJECT.md'), specs['PROJECT.md'], 'utf8');
+    fs.writeFileSync(path.join(specsDir, 'CLAUDE.md'), specs['CLAUDE.md'], 'utf8');
+    console.log(`[Cartograph CLI] Specs written to ${path.join(specsDir, 'PROJECT.md')} and CLAUDE.md`);
+  }
 
   printBlastRadiusReport(graph, args.focusFile, args.top);
 

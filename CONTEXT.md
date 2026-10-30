@@ -205,6 +205,98 @@ The existing canvas layout modes in `app/cartograph-graph-state.js` suffer from 
   - 133/133 unit tests passing across all test suites (`node --test`).
   - Automated Playwright end-to-end browser test verified on live server `http://localhost:4173/` with 0 console errors and 0 exceptions.
 
+#### ADR-011: Complete Architectural Deepening & Seam Consolidation
+- **Status:** Implemented & Verified (2026-10-30)
+- **Decisions & Contracts:**
+  1. **Phase 1: Enforce `CartographGraph` Query Seam across Application Layer**:
+     - `applyParsedGraph` retains canonical `CartographGraph` instance returned by parser or `createGraph(graph)`.
+     - Dual surface: retains `.nodes`, `.edges`, `.cycles`, `.unresolved` for backwards compatibility while replacing procedural linear scans across UI with O(1) `getNode(path)`, `hasNode(path)`, `getTopHubs(n)`, and `getNodesInLayer(layer)`.
+     - Deletes monkey-patched `state.graph._nodeMap` in `canvas-render.js` while keeping visual label disambiguation in `CartographRenderMath`.
+  2. **Phase 2: Extract Shared Architectural Spec Engine (`lib/cartograph-specs.js`)**:
+     - Extracted as the 7th shared zero-dependency UMD module.
+     - Pure interface: `generateSpecDocs(graph, options)` returning `{ 'PROJECT.md', 'CLAUDE.md', 'cartograph-scan.mjs' }` plus granular generators `generateProjectSpec`, `generateClaudeRules`, and `generateCliSnippet`.
+     - Browser `regenerateSpecDocs()` becomes a clean UI adapter; CLI scanner exposes `--specs` flag.
+     - Covered by dedicated pure Node suite `test/specs.test.js`.
+  3. **Phase 3: Deepen Intake Pipeline Seam (`lib/cartograph-intake.js`)**:
+     - Introduces `ingestEntries(entries, options)` supporting lazy content resolvers (`options.readContent` and `entry.text()`).
+     - Dual sync/async execution: synchronous strings return directly; asynchronous promises resolve transparently.
+     - Browser `ingestUploadedFileObjects` delegates directly to `CartographIntake.ingestEntries`.
+  4. **Phase 4: Decouple Command Palette Engine (`lib/cartograph-palette.js`)**:
+     - Extracted as the 8th shared zero-dependency UMD module.
+     - Pure state machine: `createPaletteEngine({ getActions, getFiles })` encapsulating action caching, fuzzy substring scoring, supplementary Unicode tie-breaking, and keyboard circular wrap-around.
+     - UI shell routes `comparePalettePaths` and `getPaletteResults` through `CartographPalette`; covered by pure Node suite `test/palette.test.js`.
+  5. **Phase 5: Deepen `CartographStore` into a True Reactive State Manager**:
+     - Retains single underlying `state` for backwards compatibility, providing canonical mutators (`dispatch`, `selectFile`, `setFolderFocus`, `setLayerFilter`, `setLayout`, `setSimulation`, `updateCamera`, `fit`).
+     - Supports pub/sub listener notifications (`store.subscribe(...)`) with error containment.
+     - Covered by dedicated pure Node suite `test/store.test.js`.
+- **Verification Baseline:**
+  - 149/149 unit tests passing across all test suites (`node --test`).
+  - Full local CLI scanner tested with `--specs` verifying artifact generation and 0 cycles.
+
+#### ADR-012: Codebase Architecture Deepening (Presenter View-Models, Canvas Render Pipeline, Shell Coordinator)
+- **Status:** Implemented & Verified (2026-10-30)
+- **Decisions & Contracts:**
+  1. **Candidate 1: Pure UI Presenter & View-Model (`lib/cartograph-view-model.js`)**:
+     - Extracted zero-DOM presentation projection engine as a shared UMD module.
+     - Pure interfaces:
+       - `computeFileListViewModel(state)`: handles search filtering, entry point tagging, layer filtering, sorting by path/dependencies/impact, and folder grouping. Drops `renderFileListSidebar` CC to < 10.
+       - `computeInspectorViewModel(node, graph, state)`: derives causal chain, dependent percentages, circular cycle warnings, and entry status. Drops `renderInspectorPanel` CC to < 10.
+       - `computeHeaderMetrics(graph, files, options)`: derives repository totals, blast-radius hotspots, and timestamp freshness.
+     - Covered by pure Node.js unit suite `test/view-model.test.js`.
+  2. **Candidate 2: Decomposed Canvas 2D Pipeline (`lib/cartograph-canvas-pipeline.js`)**:
+     - Extracted modular canvas rendering pipeline with clear pass boundaries:
+       - Pass 1: World-space spatial dot grid (`renderGrid`)
+       - Pass 2: Directory cluster region watermarks (`renderClusterWatermarks`)
+       - Pass 3: Topological stage guides (`renderPipelineGuides`)
+       - Pass 4: Adaptive edges, causality arrows, and animated march ants (`renderEdges`)
+       - Pass 5: Card bodies, accent bars, entry badges, and Macro Zoom LOD labels (`renderCards`)
+       - Orchestration: `executePipeline(renderState)`
+     - Reduced `drawDependencyGraph` in `app/cartograph-canvas-render.js` from CC 144 to CC 9!
+     - Covered by pure Node.js unit suite `test/canvas-pipeline.test.js`.
+  3. **Candidate 3: Shell Action & Responsive Coordinator (`lib/cartograph-shell-coordinator.js`)**:
+     - Extracted shell state coordination and declarative action dispatching:
+       - `computeActionRegistry(state, runners)`: declarative action dictionary mapping availability and reasons.
+       - `computePaletteNavigation(results, currentIndex, key)`: arrow key navigation wrapping and skipping disabled actions.
+       - `parseKeyboardShortcut(event)`: cross-platform Cmd/Ctrl+K and Cmd/Ctrl+P detection with IME guard.
+       - `computeResponsiveLayout(width, opts)`: pure visibility flags for phone/desktop panes and controls.
+     - Reduced `getPaletteActions` CC from 21 to 3, and `handlePaletteKeydown` from 13 to 9.
+     - Covered by pure Node.js unit suite `test/shell-coordinator.test.js`.
+- **Verification Baseline:**
+  - 166/166 unit tests passing across all test suites (`node --test`).
+  - Full CLI scan runs cleanly (`cartograph-scan.mjs . --out /tmp/cartograph-scan.json --specs`) verifying 39 files, 39 nodes, 28 edges, and 0 cycles.
+
+#### ADR-013: Student & Neurodivergent Architecture Overhaul (Quiet Shell, Role Taxonomy, Risk-First Causal Inspector)
+- **Status:** Accepted (2026-10-30)
+- **Context & Motivation:**
+  - Cognitive ergonomics research (`docs/superpowers/research/2026-10-30-neurodivergent-codebase-comprehension.md`) established that students and neurodivergent developers (ADHD, Autism Spectrum, Dyslexia) experience severe cognitive saturation when navigating large codebases.
+  - Multi-tab developer chrome, raw break simulations, and un-anchored entry exploration cause working memory overflow (Cowan K = 4 limit) and initiation paralysis.
+- **Decisions & Contracts:**
+  1. **Developer Tooling Isolation (`?mode=dev`)**:
+     - The primary user interface defaults to a quiet, distraction-free student mode.
+     - Secondary developer test tooling (Agent Evals suite tab and Break Simulation controls) are hidden by default via semantic `hidden` attributes.
+     - Developer tooling is accessible only via headless CLI scripts or an explicit URL parameter (`?mode=dev`). URL state is strictly checked on load without `localStorage` leakage.
+  2. **4-Part Architectural Role Taxonomy & Canvas Anchoring**:
+     - Every module is deterministically classified into one of four roles:
+       1. `Execution Entry Point` (inDegree = 0)
+       2. `Foundational Leaf Module` (outbound = 0)
+       3. `Internal Engine Module` (middle connectors)
+       4. `Circular Dependency` (in an import cycle)
+     - Inspector displays prominent color-coded role banners for all modules.
+     - 2D Canvas displays a 3px emerald dot (`#10B981`) on `Execution Entry Point` cards across all zoom levels (including macro zoom `< 0.45`), providing persistent orientation anchors without card crowding.
+  3. **Risk-First Causal Inspector Hierarchy**:
+     - Module inspector layout follows risk-first ordering:
+       1. Module Header & 4-Part Role Badge
+       2. Single-Column Causal Flow Card (`[Imports] ➔ [Current] ➔ [Callers] ➔ [Downstream]`)
+       3. Direct Callers (`Called by`)
+       4. Downstream Transitive Dependents (`Downstream blast radius`)
+       5. Upstream Dependencies (`Depends on`)
+     - Causal Flow pill clicks smoothly scroll and open the corresponding accordion list section in the inspector.
+  4. **In-Browser Source Code Viewing & IDE Bridge**:
+     - Source code display is collapsed inside an expandable `<details>` section by default, preventing text-density fatigue and visual crowding.
+     - Active import and export lines are highlighted when expanded.
+     - Header provides a prominent "Copy Path" button copying clean repository-relative paths (`path/file.ext`) for universal IDE and CLI interop.
+
+
 
 
 

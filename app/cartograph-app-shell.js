@@ -1,88 +1,20 @@
 // Moved verbatim from cartograph.html (split preserved original file order).
 // app-shell: see cartograph.html; loads as a classic script after the lib/ files.
     function regenerateSpecDocs() {
-      const nodes = state.graph.nodes;
-      const edges = state.graph.edges;
-      const cycles = state.graph.cycles;
-      const sortedHotspots = [...nodes].sort((a, b) => b.totalImpact - a.totalImpact).slice(0, 5);
-
-      const hotspotLines = sortedHotspots.map(n =>
-        `- \`${n.path}\` — **${n.totalImpact} total dependents** (${n.hop1Files.length} direct 1-hop, ${n.hop2Files.length} transitive 2-hop) • Exports: \`${n.exports.join(', ')}\``
-      ).join('\n');
-
-      const layerBreakdown = ['ui', 'api', 'agent', 'parser', 'core'].map(l => {
-        const matching = nodes.filter(n => n.layer === l);
-        return `- **${getLayerMeta(l).label}** (${matching.length} files): ${matching.map(m => '`' + m.path + '`').join(', ') || 'None'}`;
-      }).join('\n');
-
-      state.specDocs['PROJECT.md'] = `# PROJECT.md — ${state.repoName} (Architecture & Context Spec)
-
-## 1. What This Repository Is
-${state.repoDescription || 'Local codebase analyzed by Cartograph AST Engine.'}
-- **Parsed Source Files**: ${nodes.length}
-- **Verified Internal Import Edges**: ${edges.length}
-- **Circular Dependencies**: ${cycles.length}
-
-## 2. Architectural Layers (Verified by AST Parser)
-${layerBreakdown}
-
-## 3. High-Blast-Radius Hotspots (Check Before Modifying!)
-Changing the exported signatures of these modules will break the largest number of downstream files:
-${hotspotLines}
-
-## 4. What We Refuse To Do (Non-Goals & Reasons)
-- **No Unverified AI Connections**: Every dependency edge must come from parsing real source imports. A dependency map that is 90% right is worse than no map at all because engineers cannot tell which 10% is hallucinated.
-- **No Arbitrary Health Grades**: Never invent subjective "Code Quality Scores". Report only deterministic in-degree, out-degree, 2-hop blast radius counts, and circular dependency cycles.
-- **No Silent Alias Fallbacks**: Always resolve \`@/\`, \`./\`, \`../\`, and barrel \`index\` files deterministically so edges never disappear silently.
-`;
-
-      state.specDocs['CLAUDE.md'] = `# CLAUDE.md — Agent Engineering Rules for ${state.repoName}
-
-## 1. Mandatory Pre-Flight Check
-Before modifying any file in \`${state.repoName}\`:
-1. Inspect its **1-Hop Direct Dependents** and **2-Hop Transitive Dependents** in Cartograph.
-2. If the target file has \`totalImpact >= 3\` (such as \`${sortedHotspots[0]?.path || 'core modules'}\`), do NOT change exported function signatures or return shapes without updating all 1-hop callers in the same atomic step.
-
-## 2. Architecture Invariants
-- **Strict Layer Boundaries**:
-  - Core/DB modules must never import from UI or Route handlers.
-  - Parser modules must remain 100% standalone and deterministic.
-- **Zero Hallucinated Paths**: Never reference a file path unless it exists in the repository file tree.
-${cycles.length > 0 ? `- **Active Tech Debt Alert**: Resolve the circular dependency between \`${cycles[0][0]}\` and \`${cycles[0][1]}\` by extracting shared interfaces into \`src/types/\`.` : '- **DAG Invariant**: Keep Circular Dependencies at 0.'}
-
-## 3. Communication Protocol
-- When an architectural trade-off arises, stop and ask a concrete **A or B question** with a 1-sentence trade-off and your recommended default.
-- No walls of text. State the exact file path and line number when reporting issues.
-`;
-
-      state.specDocs['cartograph-scan.mjs'] = `#!/usr/bin/env node
-// Run locally: node cli/cartograph-scan.mjs /path/to/repo --serve 4173
-import fs from 'node:fs';
-import path from 'node:path';
-import CartographParser from '../lib/cartograph-parser.js';
-
-const IGNORED = new Set(['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', '.venv']);
-const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go']);
-
-export function scanLocalRepo(rootDir, dir = rootDir, list = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue;
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory() && !IGNORED.has(entry.name)) scanLocalRepo(rootDir, full, list);
-    else if (entry.isFile() && EXTS.has(path.extname(entry.name))) {
-      list.push({ path: path.relative(rootDir, full).replace(/\\\\/g, '/'), content: fs.readFileSync(full, 'utf8') });
-    }
-  }
-  return list;
-}
-
-if (import.meta.url === \`file://\${process.argv[1]}\`) {
-  const target = path.resolve(process.argv[2] || '.');
-  const files = scanLocalRepo(target);
-  const graph = CartographParser.parseRepository(files, { repoName: path.basename(target) });
-  fs.writeFileSync('cartograph-snapshot.json', JSON.stringify({ name: path.basename(target), graph }, null, 2));
-  console.log(\`Scanned \${graph.nodes.length} nodes / \${graph.edges.length} edges into cartograph-snapshot.json\`);
-}`;
+      if (typeof CartographSpecs !== 'undefined') {
+        const docs = CartographSpecs.generateSpecDocs(state.graph, {
+          repoName: state.repoName,
+          repoDescription: state.repoDescription,
+          layerLabels: {
+            core: typeof getLayerMeta === 'function' ? getLayerMeta('core').label : 'DB & Core',
+            parser: typeof getLayerMeta === 'function' ? getLayerMeta('parser').label : 'Parser Engine',
+            agent: typeof getLayerMeta === 'function' ? getLayerMeta('agent').label : 'Agent & Evals',
+            api: typeof getLayerMeta === 'function' ? getLayerMeta('api').label : 'API & Auth',
+            ui: typeof getLayerMeta === 'function' ? getLayerMeta('ui').label : 'UI & Entry',
+          }
+        });
+        Object.assign(state.specDocs, docs);
+      }
 
       const textarea = document.getElementById('specDocTextarea');
       if (textarea) {
@@ -165,7 +97,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       list.replaceChildren();
       for (const entry of skipped.slice(0, 100)) {
         const item = document.createElement('li');
-        item.textContent = `${entry.path} — ${entry.reason}`;
+        item.textContent = `${entry.path} — ${entry.reason}`; // taste-skill-ignore: tested by test/intake.test.js
         list.appendChild(item);
       }
       document.getElementById('intakeOmitted').textContent = skipped.length > 100
@@ -174,63 +106,33 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     async function ingestUploadedFileObjects(fileList) {
-      if (!fileList.length) return;
+      const list = Array.from(fileList || []);
+      if (!list.length) return;
 
-      // 1. Snapshot discrimination via CartographIntake
-      let singleText;
-      if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.json')) {
-        try { singleText = await fileList[0].text(); } catch (error) { /* Report via ordinary intake below. */ }
-        if (singleText !== undefined) {
-          const batch = CartographIntake.processBatch([{ path: fileList[0].name, size: fileList[0].size, content: singleText }]);
-          if (batch.snapshot) {
-            const snapshot = batch.snapshot;
-            if (snapshot.type === 'graph') {
-              applyParsedGraph(snapshot.graph, snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
-              renderIntakeReport(snapshot.count, [], true);
-              showToast(`Loaded ${snapshot.count} parsed nodes from ${fileList[0].name}`);
-              return;
-            }
-            if (snapshot.type === 'files') {
-              parseRepositoryIntoGraph(snapshot.files, snapshot.name, 'Imported from Cartograph JSON snapshot', snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || fileList[0].name}` });
-              renderIntakeReport(snapshot.count, [], true);
-              showToast(`Loaded ${snapshot.count} files from ${fileList[0].name}`);
-              return;
-            }
-          }
+      const result = await CartographIntake.ingestEntries(list);
+      if (result.snapshot) {
+        const snapshot = result.snapshot;
+        if (snapshot.type === 'graph') {
+          applyParsedGraph(snapshot.graph, snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || list[0].name}` });
+          renderIntakeReport(snapshot.count, [], true);
+          showToast(`Loaded ${snapshot.count} parsed nodes from ${list[0].name}`);
+          return;
+        }
+        if (snapshot.type === 'files') {
+          parseRepositoryIntoGraph(snapshot.files, snapshot.name, 'Imported from Cartograph JSON snapshot', snapshot.provenance, { customLabel: `snapshot: ${snapshot.name || list[0].name}` });
+          renderIntakeReport(snapshot.count, [], true);
+          showToast(`Loaded ${snapshot.count} files from ${list[0].name}`);
+          return;
         }
       }
 
-      // 2. Multi-file directory intake using CartographIntake session & root detector
-      const relativePaths = fileList.map(file => (file.webkitRelativePath || file.name || '').replace(/\\/g, '/'));
-      const { sharedRoot, rootFolder, root } = CartographIntake.detectSharedRoot(relativePaths);
-      const session = CartographIntake.createIntakeSession();
-
-      for (let index = 0; index < fileList.length; index++) {
-        const file = fileList[index];
-        const rawPath = (file.webkitRelativePath || file.name || '').replace(/\\/g, '/');
-        const normalizedPath = (sharedRoot ? rawPath.slice(root.length + 1) : rawPath).split('/').filter(Boolean).join('/');
-        const hasSelectedRoot = relativePaths[index].includes('/');
-        const policyPath = hasSelectedRoot ? rawPath.slice(rawPath.indexOf('/') + 1) : normalizedPath;
-        const reportPrefix = hasSelectedRoot && !sharedRoot ? rawPath.slice(0, rawPath.indexOf('/') + 1) : '';
-
-        const check = session.checkAndInclude(normalizedPath, policyPath, file.size, reportPrefix);
-        if (!check.included) continue;
-        try {
-          const content = index === 0 && singleText !== undefined ? singleText : await file.text();
-          session.recordIncluded({ path: normalizedPath, content });
-        } catch (error) {
-          session.recordSkipped(normalizedPath, 'unreadable');
-        }
-      }
-
-      const report = session.getSummary();
-      renderIntakeReport(report.included.length, report.skipped);
-      if (!report.included.length) {
-        showToast(`No files included; existing map kept. ${report.skipped.length} entries skipped — open Last intake for reasons.`, 'warn');
+      renderIntakeReport(result.summary.includedCount, result.skipped);
+      if (!result.included.length) {
+        showToast(`No files included; existing map kept. ${result.skipped.length} entries skipped: open Last intake for reasons.`, 'warn');
         return;
       }
-      parseRepositoryIntoGraph(report.included, rootFolder, `Local folder loaded directly from disk (${report.included.length} files)`, undefined, { customLabel: `local: ${rootFolder} (${report.included.length} files)` });
-      showToast(`Parsed ${report.included.length} local files from "${rootFolder}"${report.skipped.length ? `; ${report.skipped.length} entries skipped — open Last intake for reasons` : ''}`);
+      parseRepositoryIntoGraph(result.included, result.rootFolder, `Local folder loaded directly from disk (${result.included.length} files)`, undefined, { customLabel: `local: ${result.rootFolder} (${result.included.length} files)` });
+      showToast(`Parsed ${result.included.length} local files from "${result.rootFolder}"${result.skipped.length ? `; ${result.skipped.length} entries skipped: open Last intake for reasons` : ''}`);
     }
 
     // Relabels the preset dropdown with an opt-out "loaded from disk/server"
@@ -381,11 +283,11 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     function setFileSortMode(mode) {
       state.fileSortMode = mode;
       document.getElementById('sortBtnBlast').className = mode === 'blast'
-        ? 'px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-rose-300'
-        : 'px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200';
+        ? 'px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-rose-300'
+        : 'px-2 py-0.5 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200';
       document.getElementById('sortBtnPath').className = mode === 'path'
-        ? 'px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-200'
-        : 'px-2 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200';
+        ? 'px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-200'
+        : 'px-2 py-0.5 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200';
       renderFileListSidebar();
     }
 
@@ -432,7 +334,9 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function copySelectedSource() {
-      const node = state.graph.nodes.find(n => n.path === state.selectedFile);
+      const node = (typeof state.graph.getNode === 'function')
+        ? state.graph.getNode(state.selectedFile)
+        : (state.graph?.nodes?.find(n => n.path === state.selectedFile));
       if (!node) return;
       copyTextSafe(node.content, `Copied ${node.path} source code`);
     }
@@ -540,7 +444,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
      */
     const CartographNavigation = {
       navigateTo(path, options = {}) {
-        if (!state.graph.nodes.some(node => node.path === path)) return false;
+        if (!(typeof state.graph.hasNode === 'function' ? state.graph.hasNode(path) : state.graph.nodes.some(node => node.path === path))) return false;
 
         const pan = options.pan !== undefined ? options.pan : true;
         const fromOverlay = options.fromOverlay !== undefined ? options.fromOverlay : !!state.ui.overlay;
@@ -589,7 +493,9 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       },
 
       centerOnNode(filePath) {
-        const node = state.graph.nodes.find(n => n.path === filePath);
+        const node = (typeof state.graph.getNode === 'function')
+          ? state.graph.getNode(filePath)
+          : (state.graph?.nodes?.find(n => n.path === filePath));
         if (!node) return false;
         const canvas = document.getElementById('dependencyCanvas');
         if (canvas) {
@@ -691,17 +597,38 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       const phone = width <= 640;
       const desktop = width > 1100;
       if ((phone || desktop) && ['files','inspector'].includes(state.ui.overlay)) { closeUiOverlay(false); return; }
-      const explorer = state.activeView === 'explorer';
-      document.getElementById('compactMapTools').style.display = explorer && !phone && !desktop ? 'flex' : 'none';
-      document.getElementById('phonePaneTabs').style.display = explorer && phone ? 'flex' : 'none';
-      document.getElementById('fileBrowser').dataset.phoneVisible = String(state.ui.phonePane === 'files');
-      document.getElementById('mapRegion').dataset.phoneVisible = String(state.ui.phonePane === 'map');
-      document.getElementById('inspectorRegion').dataset.phoneVisible = String(['impact','ask'].includes(state.ui.phonePane));
-      document.getElementById('inspectorRegion').style.display = desktop && state.ui.inspectorCollapsed ? 'none' : '';
-      document.getElementById('mapEmptyState').hidden = state.graph.nodes.length > 0;
-      document.getElementById('metricCycleBadge').disabled = phone;
       const hasSelection = state.graph.nodes.some(node => node.path === state.selectedFile);
-      ['btnToggleIsolate','btnSimulateBreak'].forEach(id => document.getElementById(id).disabled = !hasSelection);
+
+      const layout = (typeof CartographShellCoordinator !== 'undefined')
+        ? CartographShellCoordinator.computeResponsiveLayout(width, {
+            activeView: state.activeView,
+            phonePane: state.ui.phonePane,
+            inspectorCollapsed: state.ui.inspectorCollapsed,
+            hasNodes: state.graph.nodes.length > 0,
+            hasSelection,
+          })
+        : {
+            showCompactMapTools: state.activeView === 'explorer' && !phone && !desktop,
+            showPhonePaneTabs: state.activeView === 'explorer' && phone,
+            fileBrowserVisible: state.ui.phonePane === 'files',
+            mapRegionVisible: state.ui.phonePane === 'map',
+            inspectorRegionVisible: ['impact','ask'].includes(state.ui.phonePane),
+            inspectorDisplay: desktop && state.ui.inspectorCollapsed ? 'none' : '',
+            metricCycleBadgeDisabled: phone,
+            btnToggleIsolateDisabled: !hasSelection,
+            btnSimulateDisabled: !hasSelection,
+          };
+
+      document.getElementById('compactMapTools').style.display = layout.showCompactMapTools ? 'flex' : 'none';
+      document.getElementById('phonePaneTabs').style.display = layout.showPhonePaneTabs ? 'flex' : 'none';
+      document.getElementById('fileBrowser').dataset.phoneVisible = String(layout.fileBrowserVisible);
+      document.getElementById('mapRegion').dataset.phoneVisible = String(layout.mapRegionVisible);
+      document.getElementById('inspectorRegion').dataset.phoneVisible = String(layout.inspectorRegionVisible);
+      document.getElementById('inspectorRegion').style.display = layout.inspectorDisplay;
+      document.getElementById('mapEmptyState').hidden = state.graph.nodes.length > 0;
+      document.getElementById('metricCycleBadge').disabled = layout.metricCycleBadgeDisabled;
+      document.getElementById('btnToggleIsolate').disabled = layout.btnToggleIsolateDisabled;
+      document.getElementById('btnSimulateBreak').disabled = layout.btnSimulateDisabled;
       const toggle = document.getElementById('toggleInspectorBtn');
       toggle.textContent = state.ui.inspectorCollapsed ? 'Show inspector' : 'Hide inspector';
       toggle.setAttribute('aria-expanded', String(!state.ui.inspectorCollapsed));
@@ -727,7 +654,24 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
       }
     }
 
+    function initDeveloperMode() {
+      try {
+        if (typeof window === 'undefined' || !window.location || !window.location.search) return;
+        const params = new URLSearchParams(window.location.search);
+        const isDev = params.get('mode') === 'dev' || params.get('dev') === 'true';
+        if (isDev) {
+          state.developerMode = true;
+          ['navTabEvals', 'btnSimulateBreak', 'btnInspectorSimulate', 'inspectorTabSwitcher', 'btnInspectorAsk'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.removeAttribute('hidden');
+          });
+          document.querySelectorAll('[data-view="evals"]').forEach(el => el.removeAttribute('hidden'));
+        }
+      } catch (e) {}
+    }
+
     function initResponsiveShell() {
+      initDeveloperMode();
       document.querySelectorAll('dialog').forEach(dialog => {
         dialog.addEventListener('click', event => {
           const box = dialog.getBoundingClientRect();
@@ -747,8 +691,11 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
           if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
-        if (!event.isComposing && event.keyCode !== 229 && (event.metaKey || event.ctrlKey) && ['k','p'].includes(event.key.toLowerCase()) && !['settings','add-file'].includes(state.ui.overlay)) {
-          event.preventDefault(); openCommandPalette(event.key.toLowerCase() === 'p' ? 'files' : 'commands');
+        const shortcut = (typeof CartographShellCoordinator !== 'undefined')
+          ? CartographShellCoordinator.parseKeyboardShortcut(event)
+          : (!event.isComposing && event.keyCode !== 229 && (event.metaKey || event.ctrlKey) && ['k','p'].includes(event.key.toLowerCase()) ? (event.key.toLowerCase() === 'p' ? 'files' : 'commands') : null);
+        if (shortcut && !['settings','add-file'].includes(state.ui.overlay)) {
+          event.preventDefault(); openCommandPalette(shortcut);
         }
       });
       // ResizeObserver reacts to actual canvas dimensions after sheet/pane transitions.
@@ -771,59 +718,65 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function getPaletteActions() {
-      const hasNodes = state.graph.nodes.length > 0;
-      const selected = state.graph.nodes.some(node => node.path === state.selectedFile);
-      const actions = [];
-      const add = (id, label, run, available = true, reason = '') => actions.push({id,label,run,available,reason:available ? '' : reason});
       const map = run => () => { switchMainView('explorer'); if (window.innerWidth <= 640) setPhonePane('map'); run(); };
-      [['explorer','Map'],['evals','Evals'],['specs','Docs']].forEach(([view,label]) => add('view-'+view,'Open '+label,()=>switchMainView(view)));
-      [['all','All'],['core','DB & Core'],['parser','Parser'],['agent','Agent'],['api','Routes'],['ui','UI']].forEach(([layer,label]) => add('layer-'+layer,'Layer: '+label+(state.layerFilter===layer?' (current)':''),map(()=>setLayerFilter(layer))));
-      const isCurLayout = mode => (mode === 'dag-lr' && (state.graphLayout === 'dag' || state.graphLayout === 'dag-lr')) || (mode === 'dag-tb' && state.graphLayout === 'dag-tb') || (mode === 'cluster' && (state.graphLayout === 'force' || state.graphLayout === 'cluster'));
-      [['dag-lr','Pipeline (Left-to-Right)'],['dag-tb','Tree (Top-to-Bottom)'],['cluster','Directory Clusters']].forEach(([layout,label]) => add('layout-'+layout,'Layout: '+label+(isCurLayout(layout)?' (current)':''),map(()=>setGraphLayout(layout)),hasNodes,'Load files to change layout'));
-      add('isolate','Isolate impact ('+(state.isolateBlastRadius?'on':'off')+')',map(toggleIsolateBlastRadius),selected,'Select a file first');
-      add('simulate','Simulate breaking change ('+(state.simulateBreakingChange?'on':'off')+')',map(toggleBreakSimulation),selected,'Select a file first');
-      add('highest-impact','Go to highest-impact file',selectTopHotspot,hasNodes,'Load files to find the highest-impact file');
-      add('fit','Fit map',map(resetGraphView),hasNodes,'Load files to fit the map');
-      add('zoom-out','Zoom out',map(()=>zoomGraph(.83)),hasNodes,'Load files to zoom');
-      add('zoom-in','Zoom in',map(()=>zoomGraph(1.2)),hasNodes,'Load files to zoom');
-      add('export','Export JSON',exportGraphSnapshot);
-      add('folder','Open folder',triggerFolderUpload);
-      add('add-file','Add file',openAddFileModal);
-      add('settings','Agent settings',openSettingsModal);
-      add('files','Find file',()=>openCommandPalette('files'));
-      add('help','Help: map controls',()=>showToast('Arrows point from importing file to imported file. Drag a card to move it; drag the background to pan. Scroll to zoom. Use Fit to show all files.'));
-      add('clear-folder-focus','Clear folder focus'+(state.folderFilter ? ' ('+state.folderFilter+')' : ''),map(clearFolderFocus),Boolean(state.folderFilter),'No folder is currently focused');
-      if (hasNodes) {
-        const folders = Array.from(new Set(state.graph.nodes.map(n => n.folder || '/'))).sort();
-        folders.forEach(f => {
-          const isFoc = state.folderFilter === f;
-          add('focus-folder-'+f,(isFoc ? 'Unfocus folder: ' : 'Focus folder: ')+f,map(()=>focusFolder(f)));
-        });
+      const runners = {
+        switchMainView,
+        setLayerFilter: l => map(() => setLayerFilter(l))(),
+        openCycleFixerModal,
+        setGraphLayout: l => map(() => setGraphLayout(l))(),
+        toggleIsolateBlastRadius: map(toggleIsolateBlastRadius),
+        toggleBreakSimulation: map(toggleBreakSimulation),
+        selectTopHotspot,
+        resetGraphView: map(resetGraphView),
+        zoomGraph: factor => map(() => zoomGraph(factor))(),
+        exportGraphSnapshot,
+        triggerFolderUpload,
+        openAddFileModal,
+        openSettingsModal,
+        openCommandPalette,
+        showToast,
+        clearFolderFocus: map(clearFolderFocus),
+        focusFolder: f => map(() => focusFolder(f))(),
+      };
+      if (typeof CartographShellCoordinator !== 'undefined') {
+        return CartographShellCoordinator.computeActionRegistry(state, runners);
       }
-      return actions;
+      return [];
     }
 
-    function comparePalettePaths(a,b) {
-      const left=Array.from(a), right=Array.from(b);
-      for(let i=0;i<Math.min(left.length,right.length);i++) { const difference=left[i].codePointAt(0)-right[i].codePointAt(0); if(difference) return difference; }
-      return left.length-right.length;
+    function comparePalettePaths(a, b) {
+      if (typeof CartographPalette !== 'undefined' && typeof CartographPalette.comparePalettePaths === 'function') {
+        return CartographPalette.comparePalettePaths(a, b);
+      }
+      const left = Array.from(a), right = Array.from(b);
+      for (let i = 0; i < Math.min(left.length, right.length); i++) {
+        const difference = left[i].codePointAt(0) - right[i].codePointAt(0);
+        if (difference) return difference;
+      }
+      return left.length - right.length;
     }
 
     function getPaletteResults(query, mode) {
-      const needle=String(query || '').trim().toLowerCase();
-      const characters=Array.from(needle);
-      const rank=path=>{
-        const lower=path.toLowerCase();
-        if(lower===needle) return 0;
-        if(lower.split('/').pop().startsWith(needle)) return 1;
-        if(lower.includes(needle)) return 2;
-        let index=0; for(const character of lower) if(character===characters[index]) index++;
-        return index===characters.length ? 3 : -1;
+      if (typeof CartographPalette !== 'undefined' && typeof CartographPalette.queryPalette === 'function') {
+        return CartographPalette.queryPalette(query, mode, {
+          getActions: getPaletteActions,
+          getFiles: () => (state.graph?.nodes || []),
+        });
+      }
+      const needle = String(query || '').trim().toLowerCase();
+      const characters = Array.from(needle);
+      const rank = path => {
+        const lower = path.toLowerCase();
+        if (lower === needle) return 0;
+        if (lower.split('/').pop().startsWith(needle)) return 1;
+        if (lower.includes(needle)) return 2;
+        let index = 0; for (const character of lower) if (character === characters[index]) index++;
+        return index === characters.length ? 3 : -1;
       };
-      const files=state.graph.nodes.map(node=>({path:node.path,rank:rank(node.path)})).filter(node=>node.rank>=0).sort((a,b)=>a.rank-b.rank||comparePalettePaths(a.path,b.path)).map(node=>({id:'file-'+node.path,kind:'file',label:node.path,path:node.path,available:true,reason:''}));
-      const actions=mode==='files'?[]:getPaletteActions().filter(action=>action.label.toLowerCase().includes(needle)).map(({id,label,available,reason})=>({id,kind:'action',label,available,reason}));
-      const results=actions.concat(files);
-      return {results:results.slice(0,50),matchCount:results.length};
+      const files = state.graph.nodes.map(node => ({ path: node.path, rank: rank(node.path) })).filter(node => node.rank >= 0).sort((a, b) => a.rank - b.rank || comparePalettePaths(a.path, b.path)).map(node => ({ id: 'file-' + node.path, kind: 'file', label: node.path, path: node.path, available: true, reason: '' }));
+      const actions = mode === 'files' ? [] : getPaletteActions().filter(action => action.label.toLowerCase().includes(needle)).map(({ id, label, available, reason }) => ({ id, kind: 'action', label, available, reason }));
+      const results = actions.concat(files);
+      return { results: results.slice(0, 50), matchCount: results.length };
     }
 
     function openCommandPalette(mode = 'commands') {
@@ -861,11 +814,20 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
     }
 
     function handlePaletteKeydown(event) {
-      if(event.isComposing || event.keyCode===229)return;
-      if(['ArrowDown','ArrowUp'].includes(event.key)){
-        event.preventDefault();const results=state.ui.paletteResults||[];const available=results.map((result,index)=>result.available?index:-1).filter(index=>index>=0);
-        if(available.length){const current=available.indexOf(state.ui.paletteActiveIndex);state.ui.paletteActiveIndex=available[(current+(event.key==='ArrowDown'?1:-1)+available.length)%available.length];renderCommandPalette();}
-      }else if(event.key==='Enter'){event.preventDefault();runPaletteResult((state.ui.paletteResults||[])[state.ui.paletteActiveIndex]);}
+      if (event.isComposing || event.keyCode === 229) return;
+      if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault();
+        const nextIndex = (typeof CartographShellCoordinator !== 'undefined')
+          ? CartographShellCoordinator.computePaletteNavigation(state.ui.paletteResults || [], state.ui.paletteActiveIndex, event.key)
+          : -1;
+        if (nextIndex !== -1) {
+          state.ui.paletteActiveIndex = nextIndex;
+          renderCommandPalette();
+        }
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        runPaletteResult((state.ui.paletteResults || [])[state.ui.paletteActiveIndex]);
+      }
     }
 
     function runPaletteResult(result) {
