@@ -5,7 +5,7 @@ const vm = require('node:vm');
 function harness() {
   const canvas = { clientWidth: 860, clientHeight: 600 };
   const context = vm.createContext({ console, setTimeout, clearTimeout, window: {addEventListener(){}}, document: {getElementById(id){return id === 'dependencyCanvas' ? canvas : null;}} });
-  for (const file of ['lib/cartograph-intake.js','lib/cartograph-parser.js','lib/cartograph-agent.js','lib/cartograph-evals.js','lib/cartograph-fit.js','lib/cartograph-layouts.js','lib/cartograph-render-math.js','app/cartograph-preset-repos.js','app/cartograph-graph-state.js','app/cartograph-canvas-render.js','app/cartograph-ui-panels.js','app/cartograph-agent-evals.js','app/cartograph-app-shell.js']) vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
+  for (const file of ['lib/cartograph-intake.js','lib/cartograph-parser.js','lib/cartograph-agent.js','lib/cartograph-evals.js','lib/cartograph-fit.js','lib/cartograph-layouts.js','lib/cartograph-render-math.js','lib/cartograph-specs.js','lib/cartograph-palette.js','lib/cartograph-view-model.js','lib/cartograph-canvas-pipeline.js','lib/cartograph-shell-coordinator.js','app/cartograph-preset-repos.js','app/cartograph-graph-state.js','app/cartograph-canvas-render.js','app/cartograph-ui-panels.js','app/cartograph-agent-evals.js','app/cartograph-app-shell.js']) vm.runInContext(fs.readFileSync(file,'utf8'),context,{filename:file});
   return source => vm.runInContext(source,context);
 }
 test('card bounds include the full centered card',()=>{const run=harness();assert.deepEqual(JSON.parse(run('JSON.stringify(getGraphNodeBounds({x:0,y:0}))')),{minX:-96,minY:-24,maxX:96,maxY:24});});
@@ -97,6 +97,11 @@ test('inspector panel renders metadata, circular cycle warning, and quick action
     'lib/cartograph-fit.js',
     'lib/cartograph-layouts.js',
     'lib/cartograph-render-math.js',
+    'lib/cartograph-specs.js',
+    'lib/cartograph-palette.js',
+    'lib/cartograph-view-model.js',
+    'lib/cartograph-canvas-pipeline.js',
+    'lib/cartograph-shell-coordinator.js',
     'app/cartograph-preset-repos.js',
     'app/cartograph-graph-state.js',
     'app/cartograph-canvas-render.js',
@@ -229,6 +234,11 @@ test('agent trace and evals view support tool badges, expand-all and JSON report
     'lib/cartograph-fit.js',
     'lib/cartograph-layouts.js',
     'lib/cartograph-render-math.js',
+    'lib/cartograph-specs.js',
+    'lib/cartograph-palette.js',
+    'lib/cartograph-view-model.js',
+    'lib/cartograph-canvas-pipeline.js',
+    'lib/cartograph-shell-coordinator.js',
     'app/cartograph-preset-repos.js',
     'app/cartograph-graph-state.js',
     'app/cartograph-canvas-render.js',
@@ -490,6 +500,11 @@ test('folder focus, camera refit, LOD macro zoom and browser filter clearing', (
     'lib/cartograph-fit.js',
     'lib/cartograph-layouts.js',
     'lib/cartograph-render-math.js',
+    'lib/cartograph-specs.js',
+    'lib/cartograph-palette.js',
+    'lib/cartograph-view-model.js',
+    'lib/cartograph-canvas-pipeline.js',
+    'lib/cartograph-shell-coordinator.js',
     'app/cartograph-preset-repos.js',
     'app/cartograph-graph-state.js',
     'app/cartograph-canvas-render.js',

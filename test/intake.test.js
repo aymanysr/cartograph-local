@@ -232,3 +232,37 @@ test('CartographIntake discriminate classifies snapshots and returns typed metad
   assert.equal(CartographIntake.discriminate('{ invalid json'), null);
   assert.equal(CartographIntake.discriminate({ not: 'a snapshot' }), null);
 });
+
+test('CartographIntake ingestEntries supports adaptive sync and async content resolvers', async () => {
+  // Synchronous resolution
+  const syncEntries = [
+    { path: 'pkg/src/a.ts', size: 10, content: 'export const a = 1;' },
+    { path: 'pkg/src/b.ts', size: 20, content: () => 'export const b = 2;' },
+  ];
+  const syncResult = CartographIntake.ingestEntries(syncEntries);
+  assert.equal(typeof syncResult.then, 'undefined', 'sync inputs must return synchronously');
+  assert.equal(syncResult.included.length, 2);
+  assert.equal(syncResult.included[0].path, 'src/a.ts');
+  assert.equal(syncResult.included[1].content, 'export const b = 2;');
+
+  // Asynchronous resolution via text()
+  const asyncEntries = [
+    { name: 'c.ts', size: 15, text: async () => 'export const c = 3;' },
+    { name: 'bad.ts', size: 10, text: async () => { throw new Error('locked file'); } },
+  ];
+  const asyncResult = await CartographIntake.ingestEntries(asyncEntries);
+  assert.equal(asyncResult.included.length, 1);
+  assert.equal(asyncResult.included[0].path, 'c.ts');
+  assert.equal(asyncResult.summary.countsByReason.unreadable, 1);
+
+  // Custom lazy readContent resolver
+  const customEntries = [
+    { path: 'lazy/x.ts', size: 12 },
+    { path: 'lazy/y.ts', size: 14 },
+  ];
+  const resolved = await CartographIntake.ingestEntries(customEntries, {
+    readContent: async (entry) => `// content for ${entry.path}`,
+  });
+  assert.equal(resolved.included.length, 2);
+  assert.equal(resolved.included[0].content, '// content for lazy/x.ts');
+});

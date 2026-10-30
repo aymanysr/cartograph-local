@@ -1,27 +1,17 @@
-# CLAUDE.md — Agent Governance & Engineering Rules
+# CLAUDE.md — Agent Engineering Rules for cartograph-local-project
 
-## 1. Role & Operating Mode
-You are working on **Cartograph Local**, a deterministic codebase intelligence application. Before writing or modifying any code, read `PROJECT.md` and the phase spec in `specs/` matching the area you are touching — phases 01–03 are all implemented; the index with per-phase implementation notes lives in `specs/README.md`.
+## 1. Mandatory Pre-Flight Check
+Before modifying any file in `cartograph-local-project`:
+1. Inspect its **1-Hop Direct Dependents** and **2-Hop Transitive Dependents** in Cartograph.
+2. If the target file has `totalImpact >= 3` (such as `lib/cartograph-parser.js`), do NOT change exported function signatures or return shapes without updating all 1-hop callers in the same atomic step.
 
-## 2. Non-Negotiable Architecture Invariants
-1. **Parser Standalone Rule**: The code parser (`parseRepository` / `cli/cartograph-scan.mjs`) must remain 100% standalone and deterministic. It must never call an LLM or external network service to construct the dependency graph.
-2. **Strict Grounding Contract**: Any explanation or agent response shown in the UI must only reference file paths that exist in `state.graph.nodes`. Every mentioned file path must be rendered as an interactive badge (`data-filepath="..."`) so the user can click it to verify.
-3. **2-Hop Blast Radius Definition** (plain-English gloss for this set-builder notation lives in the root [`README.md`](README.md#glossary)):
-   - `hop1` (Direct Dependents): `{ u | (u -> selected) in edges }`
-   - `hop2` (Transitive Dependents): `{ v | (v -> u) in edges for u in hop1 } - hop1 - {selected}`
-   - `outbound` (Direct Imports): `{ w | (selected -> w) in edges }`
-4. **Visible Agent Tool Trace**: When answering a repository question, the agent must log each tool invocation (`tool`, `args`, `output`, `files`) in the step-by-step trace panel before emitting the final synthesis.
-5. **Shared modules rule**: all parsing lives in `lib/cartograph-parser.js`, the agent planner in `lib/cartograph-agent.js`, and the eval scorer in `lib/cartograph-evals.js`. `cartograph.html` and `cli/cartograph-scan.mjs` must load those modules; never fork or duplicate that logic. `parseRepository(files)` is the public seam used by tests. The planner and scorer must stay DOM-free so Node tests run the same code the browser runs.
+## 2. Architecture Invariants
+- **Strict Layer Boundaries**:
+  - Core/DB modules must never import from UI or Route handlers.
+  - Parser modules must remain 100% standalone and deterministic.
+- **Zero Hallucinated Paths**: Never reference a file path unless it exists in the repository file tree.
+- **DAG Invariant**: Keep Circular Dependencies at 0.
 
-## 3. Communication & Decision Protocol
-- If an architectural ambiguity arises, do not guess silently and do not ask open-ended questions. Present a concrete **A or B choice** with a 1-sentence trade-off and your recommended default.
-- Keep explanations in plain English—no walls of boilerplate text.
-- Never silently swallow unresolved internal imports; track them so parser resolution accuracy can be inspected.
-
-## 4. Verification Checklist Before Completing Any Task
-- [ ] `node --test` passes for the shared parser suite.
-- [ ] `node cli/cartograph-scan.mjs . --out /tmp/cartograph-scan.json` produces nodes, edges, cycles, and unresolved imports without crashing.
-- [ ] Does the parser resolve `./`, `../`, `@/`, and `/index` barrel imports across the loaded repository?
-- [ ] Does clicking any node immediately update the 1-hop and 2-hop blast radius counts, graph highlighting, and grounded module explanation?
-- [ ] Are all file badges inside explanations and agent answers clickable to jump to that file on the map?
-- [ ] Does the Evaluation Suite score 100% on Citation Groundedness with zero hallucinated file paths?
+## 3. Communication Protocol
+- When an architectural trade-off arises, stop and ask a concrete **A or B question** with a 1-sentence trade-off and your recommended default.
+- No walls of text. State the exact file path and line number when reporting issues.

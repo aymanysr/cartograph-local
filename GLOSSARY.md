@@ -16,3 +16,5 @@
 - **Viewport Camera**: The shared, zero-dependency projection engine (`lib/cartograph-fit.js`) governing world-to-screen coordinate mapping, cursor-anchored focal zoom, node centering, and bounding-box auto-framing.
 - **Intake Pipeline**: The unified file ingestion engine (`lib/cartograph-intake.js`) providing snapshot discrimination, common root normalization, folder pruning, and skip policy enforcement for CLI and browser adapters.
 - **Structured Agent Plan**: The presentation-free domain record emitted by `lib/cartograph-agent.js` containing the deterministic tool trace, topological blast radius, and provenance-validated citations.
+- **Architectural Spec Engine**: The shared, zero-dependency specification module (`lib/cartograph-specs.js`) deterministically synthesizing `PROJECT.md`, `CLAUDE.md`, and CLI code from parsed dependency graphs.
+- **Palette Engine**: The decoupled search and navigation state machine (`lib/cartograph-palette.js`) governing action registration, fuzzy substring scoring, supplementary Unicode tie-breaking, and keyboard circular selection.

@@ -1,58 +1,27 @@
-# PROJECT.md — Cartograph (Local Codebase Intelligence & Impact Graph)
+# PROJECT.md — cartograph-local-project (Architecture & Context Spec)
 
-## Who This Is For
-Someone opening a codebase they didn't write—usually one built rapidly with AI coding agents—who needs to understand how modules connect and what will break before changing a file.
+## 1. What This Repository Is
+Deterministic scan of /Users/ayousr/.codex/worktrees/quiet-shell-redesign/cartograph-local-project
+- **Parsed Source Files**: 39
+- **Verified Internal Import Edges**: 28
+- **Circular Dependencies**: 0
 
-## The Core Problem
-AI coding agents write thousands of lines of working code across dozens of files. Folder trees hide how files actually depend on each other. Changing one seemingly isolated file can silently break 11 downstream modules two hops away. Worse, asking a standard LLM about a codebase produces confident, well-written explanations that invent connections that do not exist.
+## 2. Architectural Layers (Verified by AST Parser)
+- **UI & Entry** (0 files): None
+- **API & Auth** (0 files): None
+- **Agent & Evals** (0 files): None
+- **Parser Engine** (0 files): None
+- **DB & Core** (39 files): `app/cartograph-agent-evals.js`, `app/cartograph-app-shell.js`, `app/cartograph-canvas-render.js`, `app/cartograph-graph-state.js`, `app/cartograph-preset-repos.js`, `app/cartograph-ui-panels.js`, `cli/cartograph-scan.mjs`, `lib/cartograph-agent.js`, `lib/cartograph-canvas-pipeline.js`, `lib/cartograph-evals.js`, `lib/cartograph-fit.js`, `lib/cartograph-intake.js`, `lib/cartograph-layouts.js`, `lib/cartograph-palette.js`, `lib/cartograph-parser.js`, `lib/cartograph-render-math.js`, `lib/cartograph-shell-coordinator.js`, `lib/cartograph-specs.js`, `lib/cartograph-view-model.js`, `package.json`, `test/agent.test.js`, `test/camera.test.js`, `test/canvas-pipeline.test.js`, `test/evals-ui.test.js`, `test/evals.test.js`, `test/fit.test.js`, `test/intake.test.js`, `test/layouts.test.js`, `test/navigation.test.js`, `test/palette.test.js`, `test/parser.test.js`, `test/render-math.test.js`, `test/replacement.test.js`, `test/shell-coordinator.test.js`, `test/specs.test.js`, `test/store.test.js`, `test/student-features.test.js`, `test/ui.test.js`, `test/view-model.test.js`
 
-## The Golden Rule
-**Every line on the map comes from parsing real code.**
-- Connections are never guessed, inferred, or summarized by an LLM.
-- The deterministic import/export parser proves the graph first. The top-level graph is `{ name, description, nodes, edges, cycles, unresolved }`; `exports` live on each node and `line`/`statement`/`specifier` live on each edge.
-- The AI is **only** allowed to explain or traverse edges that the parser has already proved exist.
+## 3. High-Blast-Radius Hotspots (Check Before Modifying!)
+Changing the exported signatures of these modules will break the largest number of downstream files:
+- `lib/cartograph-parser.js` — **6 total dependents** (6 direct 1-hop, 0 transitive 2-hop) • Exports: `cartograph-parser`
+- `lib/cartograph-agent.js` — **3 total dependents** (3 direct 1-hop, 0 transitive 2-hop) • Exports: `cartograph-agent`
+- `lib/cartograph-render-math.js` — **3 total dependents** (2 direct 1-hop, 1 transitive 2-hop) • Exports: `cartograph-render-math`
+- `lib/cartograph-fit.js` — **2 total dependents** (2 direct 1-hop, 0 transitive 2-hop) • Exports: `cartograph-fit`
+- `lib/cartograph-intake.js` — **2 total dependents** (2 direct 1-hop, 0 transitive 2-hop) • Exports: `cartograph-intake`
 
-## Core Capabilities
-1. **Local Repository Parser (Deterministic Import/Export Engine)**
-   - Parses TypeScript/JavaScript (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`), Python (`.py`), and Go (`.go`) directly from local folders or via the local CLI scanner.
-   - Resolves relative imports (`./`, `../`, and Python package-relative `.`/`..`), hard-coded aliases (`@/`, `~/`; no `tsconfig.json` path mapping), repo-relative `src/...` paths, barrel files (`index.ts`, `index.tsx`, `index.js`, `__init__.py`), dynamic `import()`, CommonJS `require()`, and Python `from ... import ...`.
-   - Extracts exported symbols (functions, classes, types, interfaces, constants) and exact line numbers for every import edge.
-
-2. **Interactive Dependency Map & 2-Level Blast Radius**
-   - Visualizes every file as a node sized by its 2-level impact (`totalImpact`: 1-hop + 2-hop dependents) and colored by architectural layer (`core` for db/config, `parser` for parser/ingest, `agent` for agent/evals, `api` for routes/auth/middleware, `ui` for components/hooks/entries).
-   - Selecting any file immediately highlights:
-     - **Selected File** (Indigo/Primary)
-     - **Direct Dependents — 1 Hop Out** (Rose/Red): Files that directly import the selected file and will break immediately if its exports change.
-     - **Transitive Blast Radius — 2 Hops Out** (Amber): Files that import the 1-hop dependents and will suffer cascading breakage.
-     - **Outbound Imports** (Cyan): Modules that the selected file depends on.
-
-3. **Grounded Module Explainer**
-   - Generates a concise architectural explanation of the selected module built strictly from the selected file's parsed exports/imports and its verified 1-hop neighbors, with verified 2-hop dependents and cycle membership called out where relevant.
-   - Every referenced file path is rendered as a clickable chip that selects and focuses that node on the graph.
-
-4. **Graph-Walking Codebase Agent ("Ask the Repository")**
-   - Answers multi-step architectural questions (e.g., *"Where does auth get enforced?"*, *"What breaks if I change the database client?"*) by executing a visible tool-calling loop over the parsed graph:
-     - `find_entry_points()`
-     - `search_symbols(query)`
-     - `get_file_ast(path)`
-     - `walk_dependents(path, depth=2)`
-     - `trace_dependency_path(from, to)`
-     - `detect_cycles_and_hubs(max_depth=3)`
-   - Works 100% locally using the built-in deterministic graph-walker, with optional 1-click connection to a local **Ollama** model (`http://localhost:11434`) or OpenAI-compatible API.
-   - **Current implementation caveat:** the built-in agent routes questions to concrete call arguments over a deterministic handler registry (`CartographAgent.TOOLS`) and executes every call, so trace-step output/files are derived live from the graph; routing is keyword-based, so it remains a deterministic executor rather than an LLM-driven tool-calling loop. External LLM output cannot invent paths: the raw synthesis is validated (`CartographAgent.validateSynthesis`) against the parsed graph and the visible tool trace before it may replace the deterministic answer, and an ungrounded path keeps the deterministic synthesis and raises a rejection toast. See [`specs/README.md`](specs/README.md#known-spec-to-code-gaps).
-
-5. **Quantitative Agent Evals ("Catching the AI with a Number")**
-   - Runs a golden dataset of repository questions against the deterministic agent and computes numerical scores for:
-     - **Citation Groundedness (%)**: `valid cited paths / total cited paths`. A citation is valid only if the path exists in the parsed graph **and** appeared in the agent's tool trace (strict mode). Naive/blind mode grounds by graph existence only, so it catches invented paths but cannot prove provenance.
-     - **Blast-Radius Recall (%)**: `|expected ∩ cited| / |expected|`. The case's full ground-truth set must be accurately cited — the changed node plus its 1-hop and 2-hop dependents (and outbound imports where the case declares them).
-     - **Zero Hallucinated Paths**: Any invented file path drops the score.
-   - Strict mode executes the agent per case and shows each case's real tool-step count; scoring lives in the shared, DOM-free `lib/cartograph-evals.js` (see [`lib/README.md`](lib/README.md)).
-
-## Things We Refuse To Do (And Why)
-- **No "Code Quality Grades" or arbitrary 1–10 health scores**: LLMs invent subjective numbers that mean nothing across runs. Only report deterministic metrics (in-degree, out-degree, 2-hop blast radius count, circular dependency cycles).
-- **No LLM-inferred edges**: Never let a language model guess that File A calls File B without a parsed import or symbol reference. A map that is 90% right is worse than no map at all because you cannot tell which 10% is lying.
-- **No hidden agent loops**: Every step the agent takes to answer a question must be visible in the trace log with the exact tool name, arguments, and returned file paths.
-
-## Where This Is Likely To Go Wrong (High-Risk Areas)
-1. **Path Alias & Barrel File Resolution**: If `@/lib/db` resolves to `src/lib/db/index.ts` in the compiler but the parser leaves it as an unresolved string `@/lib/db`, half the graph edges will silently disappear while still rendering a pretty picture. Always strip aliases (`@/ -> src/`), try extension candidates (`.ts`, `.tsx`, `.js`, `/index.ts`, `/index.tsx`), and match suffix paths when root prefixes vary.
-2. **Silent Hallucination in Module Summaries**: When using an LLM via Ollama or API, the prompt must pass the exact list of allowed neighbor file paths and reject any cited path not present in the parsed graph.
+## 4. What We Refuse To Do (Non-Goals & Reasons)
+- **No Unverified AI Connections**: Every dependency edge must come from parsing real source imports. A dependency map that is 90% right is worse than no map at all because engineers cannot tell which 10% is hallucinated.
+- **No Arbitrary Health Grades**: Never invent subjective "Code Quality Scores". Report only deterministic in-degree, out-degree, 2-hop blast radius counts, and circular dependency cycles.
+- **No Silent Alias Fallbacks**: Always resolve `@/`, `./`, `../`, and barrel `index` files deterministically so edges never disappear silently.
