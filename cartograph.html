@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cartograph Local — AST Codebase Intelligence & Impact Graph</title>
+  <title>Cartograph Local: AST Codebase Intelligence & Impact Graph</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
   <script src="lib/cartograph-intake.js"></script>
@@ -13,17 +13,22 @@
   <script src="lib/cartograph-fit.js"></script>
   <script src="lib/cartograph-layouts.js"></script>
   <script src="lib/cartograph-render-math.js"></script>
+  <script src="lib/cartograph-specs.js"></script>
+  <script src="lib/cartograph-palette.js"></script>
+  <script src="lib/cartograph-view-model.js"></script>
+  <script src="lib/cartograph-canvas-pipeline.js"></script>
+  <script src="lib/cartograph-shell-coordinator.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"> <!-- taste-skill-ignore: font load -->
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace']
+            sans: ['Public Sans', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'] // taste-skill-ignore: tailwind theme token
           },
           colors: {
             slate: {
@@ -40,77 +45,53 @@
   <style>
     * { box-sizing: border-box; }
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Public Sans', Inter, system-ui, -apple-system, sans-serif;
       background-color: #070B12;
       color: #F1F5F9;
       overflow-x: hidden;
     }
-    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; } /* taste-skill-ignore: code utility */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0B111E; }
     ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #334155; }
-    .file-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 1px 7px;
-      border-radius: 5px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11.5px;
-      font-weight: 500;
-      background: rgba(99, 102, 241, 0.14);
-      color: #A5B4FC;
-      border: 1px solid rgba(99, 102, 241, 0.35);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      margin: 1px 2px;
-      vertical-align: baseline;
-    }
-    .file-chip:hover {
-      background: rgba(99, 102, 241, 0.28);
-      color: #E0E7FF;
-      border-color: #4a8ad6;
-      transform: translateY(-1px);
-    }
     .glass-panel {
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(51, 65, 85, 0.65);
+      background: var(--surface);
+      border: 1px solid var(--border);
     }
 
     :root { --ground:#171719; --surface:#131217; --raised:#212023; --border:#222224; --rule:#1b1a1f; --control:#3a3a3e; --text:#fff; --muted:#8a8c92; --faint:#5f6065; --accent:#4a8ad6; --rose:#e5566f; --amber:#d9a441; --visited:#5fc39c; --radius:6px; --gap:12px; }
     html,body {height:100%;margin:0;overflow:hidden;}
-    body {display:grid!important;grid-template-columns:46px minmax(0,1fr);grid-template-rows:40px minmax(0,1fr) 26px;background:var(--ground)!important;color:var(--text);font:13px -apple-system,"SF Pro Text",system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+    body {display:grid!important;grid-template-columns:46px minmax(0,1fr);grid-template-rows:40px minmax(0,1fr) 26px;background:var(--ground)!important;color:var(--text);font:13px 'Public Sans',Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;}
     summary:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {outline:2px solid white;outline-offset:2px;}
     #shellRail {grid-column:1;grid-row:1/4;display:flex;flex-direction:column;align-items:stretch;background:var(--surface);border-right:1px solid var(--border);padding:8px 0;gap:8px;}
     #shellRail button {position:relative;height:38px;display:grid;place-items:center;color:var(--muted);} #shellRail button[aria-current="page"] {color:white;} #shellRail button[aria-current="page"]:after{content:"";position:absolute;right:0;top:0;bottom:0;width:1px;background:var(--accent);} #shellRail svg {width:17px;height:17px;} .rail-mark{text-align:center;height:24px;} .rail-settings{margin-top:auto;}
     #shellTopbar {grid-column:2;grid-row:1;display:flex;align-items:center;gap:12px;padding:0 12px;min-width:0;background:var(--ground);}
-    #shellTopbar button,#shellStatus button,#canvasToolbar button,#compactMapTools button,#phonePaneTabs button {background:transparent;border:0;border-radius:0;color:var(--muted);padding:4px 6px;white-space:nowrap;font-size:12px;box-shadow:none;}
-    #shellTopbar button:hover,#shellStatus button:hover,#canvasToolbar button:hover{background:var(--raised);color:white;} .wordmark{font-size:13px;font-weight:600;margin:0;} .topbar-spacer{flex:1;} #repositorySlot{min-width:0;} #repoPresetSelect{max-width:280px;background:transparent;border:0;color:var(--muted);padding:2px;font-size:11px;border-radius:0;} #repositoryFreshness{color:var(--muted);font-size:11px;white-space:nowrap;} #shellTopbar .primary{background:white;color:var(--surface);border-radius:var(--radius);padding:5px 10px;}
-    #viewExplorer,#viewEvals,#viewSpecs {grid-column:2;grid-row:2;min-height:0;min-width:0;background:var(--ground);} #viewExplorer{flex-direction:row;} #fileBrowser{width:236px;max-height:none;min-height:0;background:var(--surface);border:0;} #inspectorRegion{width:300px;max-height:none;min-height:0;background:var(--surface);border:0;} #mapRegion{min-width:0;min-height:0;background:var(--ground);} #canvasToolbar{position:absolute;right:12px;top:8px;display:flex;gap:4px;z-index:20;} #graphCanvasContainer{min-height:0;} #shellStatus{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-top:1px solid var(--border);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;} #shellStatus button{font:inherit;} .status-zoom{display:flex;align-items:center;gap:8px;} .compact-only,#compactMapTools,#phonePaneTabs{display:none;}
-    dialog {background:var(--surface);color:white;border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-height:calc(100dvh - 32px);max-width:calc(100vw - 32px);} dialog:modal{overscroll-behavior:contain;} dialog::backdrop{background:rgba(0,0,0,.5);overflow:hidden;overscroll-behavior:contain;} dialog:not([open]){display:none!important;} #shellOverlay{width:360px;} .sheet-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;} .sheet-heading h2{font-size:13px;font-weight:500;} .sheet-heading button{color:var(--muted);} #shellOverlayBody{min-height:0;overflow:auto;} #shellOverlayBody>#fileBrowser,#shellOverlayBody>#inspectorRegion{width:100%;height:calc(100dvh - 130px);} #navigationContent:not([hidden]){display:flex;flex-direction:column;gap:4px;} #navigationContent button{text-align:left;padding:12px;color:var(--muted);} #navigationContent select{width:100%;max-width:100%;margin-bottom:12px;} .form-dialog{width:600px;padding:0;} .form-dialog>div{max-width:none;background:var(--surface);border:0;border-radius:var(--radius);box-shadow:none;} [hidden]{display:none!important;}
-    .inspector-tab{flex:1;padding:10px 4px;color:var(--muted);position:relative;font-size:12px;} .inspector-tab[aria-selected="true"]{color:white;} .inspector-tab[aria-selected="true"]:after{content:"";position:absolute;bottom:0;left:25%;width:50%;height:1px;background:var(--accent);} .inspector-tab svg,.inspector-tab>span:nth-of-type(2){display:none;}
+    #shellTopbar button,#shellStatus button,#canvasToolbar button,#compactMapTools button,#phonePaneTabs button {background:transparent;border:0;border-radius:0;color:var(--muted);padding:4px 6px;white-space:nowrap;font-size:13px;box-shadow:none;}
+    #shellTopbar button:hover,#shellStatus button:hover,#canvasToolbar button:hover{background:var(--raised);color:white;} .wordmark{font-size:14px;font-weight:600;margin:0;} .topbar-spacer{flex:1;} #repositorySlot{min-width:0;} #repoPresetSelect{max-width:280px;background:transparent;border:0;color:var(--muted);padding:2px;font-size:13px;border-radius:0;} #repositoryFreshness{color:var(--muted);font-size:12px;white-space:nowrap;} #shellTopbar .primary{background:white;color:var(--surface);border-radius:var(--radius);padding:5px 10px;}
+    #viewExplorer,#viewEvals,#viewSpecs {grid-column:2;grid-row:2;min-height:0;min-width:0;background:var(--ground);} #viewExplorer{flex-direction:row;} #fileBrowser{width:236px;max-height:none;min-height:0;background:var(--surface);border:0;} #inspectorRegion{width:300px;max-height:none;min-height:0;background:var(--surface);border:0;} #mapRegion{min-width:0;min-height:0;background:var(--ground);} #canvasToolbar{position:absolute;right:12px;top:8px;display:flex;gap:4px;z-index:20;} #graphCanvasContainer{min-height:0;} #shellStatus{grid-column:2;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 12px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap;} #shellStatus button{font:inherit;} .status-zoom{display:flex;align-items:center;gap:8px;} .compact-only,#compactMapTools,#phonePaneTabs{display:none;}
+    dialog {background:var(--surface);color:white;border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-height:calc(100dvh - 32px);max-width:calc(100vw - 32px);} dialog:modal{overscroll-behavior:contain;} dialog::backdrop{background:rgba(0,0,0,.5);overflow:hidden;overscroll-behavior:contain;} dialog:not([open]),details:not([open]) > :not(summary),details:not([open]) > :not(summary) *{display:none!important;} #shellOverlay{width:360px;} .sheet-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;} .sheet-heading h2{font-size:13px;font-weight:500;} .sheet-heading button{color:var(--muted);} #shellOverlayBody{min-height:0;overflow:auto;} #shellOverlayBody>#fileBrowser,#shellOverlayBody>#inspectorRegion{width:100%;height:calc(100dvh - 130px);} #navigationContent:not([hidden]){display:flex;flex-direction:column;gap:4px;} #navigationContent button{text-align:left;padding:12px;color:var(--muted);} #navigationContent select{width:100%;max-width:100%;margin-bottom:12px;} .form-dialog{width:600px;padding:0;} .form-dialog>div{max-width:none;background:var(--surface);border:0;border-radius:var(--radius);box-shadow:none;} [hidden]{display:none!important;}
+    .inspector-tab{flex:1;padding:10px 4px;color:var(--muted);position:relative;font-size:13px;} .inspector-tab[aria-selected="true"]{color:white;} .inspector-tab[aria-selected="true"]:after{content:"";position:absolute;bottom:0;left:25%;width:50%;height:1px;background:var(--accent);} .inspector-tab svg,.inspector-tab>span:nth-of-type(2){display:none;}
     @media(max-width:1100px){body{grid-template-columns:minmax(0,1fr);grid-template-rows:48px minmax(0,1fr) 26px;} #shellRail{display:none;} #shellTopbar,#viewExplorer,#viewEvals,#viewSpecs,#shellStatus{grid-column:1;} #shellTopbar{gap:8px;} .compact-only{display:block;} #repositorySlot,#repositoryFreshness{display:none;} #compactMapTools{display:flex;position:absolute;left:12px;top:56px;z-index:20;gap:8px;} #compactMapTools button{background:var(--surface);} #fileBrowser,#inspectorRegion{display:none;} #shellOverlayBody>#fileBrowser,#shellOverlayBody>#inspectorRegion{display:flex;} #canvasToolbar{top:8px;} #canvasToolbar #toggleInspectorBtn{display:none;}}
     @media(max-width:640px){body{grid-template-rows:48px 44px minmax(0,1fr) 26px;font-size:14px;} #shellTopbar{padding:0 16px;} #shellTopbar .desktop-detail{display:none;} #shellTopbar button{min-height:44px;font-size:14px;} #phonePaneTabs{grid-column:1;grid-row:2;display:flex;align-items:stretch;background:var(--surface);} #phonePaneTabs button{flex:1;font-size:14px;position:relative;} #phonePaneTabs button[aria-selected="true"]{color:white;} #phonePaneTabs button[aria-selected="true"]:after{content:"";position:absolute;bottom:0;width:30px;left:calc(50% - 15px);height:1px;background:var(--accent);} #viewExplorer,#viewEvals,#viewSpecs{grid-row:3;} #shellStatus{grid-row:4;font-size:11px;} .status-hotspot,.status-zoom,#compactMapTools{display:none!important;} #fileBrowser,#inspectorRegion{width:100%;} #viewExplorer>[data-phone-visible="true"]{display:flex!important;} #viewExplorer>[data-phone-visible="false"]{display:none!important;} #canvasToolbar{left:8px;right:8px;justify-content:flex-end;gap:0;} #canvasToolbar button{min-width:44px;min-height:44px;font-size:12px;} #canvasToolbar #toggleInspectorBtn{display:none;} #fileBrowser button,#fileBrowser input,#inspectorRegion button,dialog button,dialog input,dialog select{min-height:44px;} #fileListContainer button{padding-top:8px;padding-bottom:8px;} #fileListContainer button div{font-size:12px;} #fileListContainer button div>div:first-child{font-size:14px;} #inspectorRegion>div:first-child{display:none;} #viewEvals,#viewSpecs{padding:16px;} #viewSpecs .grid{display:flex;flex-direction:column;} textarea{max-width:100%;} }
 
-    .file-browser-controls{padding:12px;display:grid;gap:12px}.file-browser-heading,.file-sort{display:flex;justify-content:space-between;font-size:12px}.file-browser-controls input{width:100%;background:transparent;border:1px solid var(--control);border-radius:6px;padding:6px;font-size:11px}.file-sort button{position:relative;padding-bottom:6px;color:var(--muted)}.file-row{display:flex;width:100%;height:30px;align-items:center;justify-content:space-between;padding:0 12px;border-left:1px solid transparent;font:11px 'JetBrains Mono',monospace;gap:12px}.file-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row[aria-current=true]{background:var(--raised);border-left-color:var(--accent)}.file-impact{color:var(--muted)}.file-impact.nonzero{color:var(--rose)}.folder-heading{font-size:11px;color:var(--muted);padding:12px 12px 6px}.impact-content{padding:16px;font-size:13px;line-height:1.6}.impact-content h1{font:500 13px 'JetBrains Mono',monospace;overflow-wrap:anywhere}.impact-context,#inspectorImpactCaption{font-size:11px;color:var(--muted)}.impact-headline{font:400 30px 'JetBrains Mono',monospace;margin-top:18px}.impact-kpis{display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--border);margin:16px 0;padding:12px 0;gap:8px}.impact-kpis span{display:block;font:400 16px 'JetBrains Mono',monospace}.impact-kpis label{display:block;color:var(--muted);font-size:11px}.impact-content section{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}.impact-content h2{font-size:12px;font-weight:500}.impact-content h2 span{float:right;color:var(--muted);font:11px 'JetBrains Mono',monospace}.impact-content pre{padding-right:4px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 'JetBrains Mono',monospace;overflow:auto;max-height:300px}.impact-content details{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}.file-chip{font:11px 'JetBrains Mono',monospace!important;color:var(--text)!important;background:transparent!important;border:0!important;border-bottom:1px solid var(--control)!important;border-radius:0!important;padding:0 2px!important;overflow-wrap:anywhere}.impact-content [class*=text-]{font-size:11px}.impact-content [class*=bg-]:not([data-badge]):not(#inspectorCycleBadge):not(#inspectorActionToolbar *){background:transparent!important}.impact-content [class*=text-cyan]:not([data-badge]):not(#inspectorActionToolbar *),.impact-content [class*=text-emerald]:not([data-badge]):not(#inspectorActionToolbar *),.impact-content [class*=text-indigo]:not([data-badge]):not(#inspectorActionToolbar *){color:var(--text)!important}.impact-content [class*=text-rose]{color:var(--rose)!important}.impact-content [class*=text-amber]{color:var(--amber)!important}#fileListContainer{padding:0!important;gap:0!important}.impact-content .text-\[10px\]{font-size:11px!important}.impact-content strong{font-weight:500}#inspectorHop1Count:not(:empty){color:var(--rose)}#inspectorHop2Count:not(:empty){color:var(--amber)}.impact-content{font-weight:400!important}#inspectorActionToolbar button{background:var(--surface);border:1px solid var(--control);color:var(--text);min-height:30px;cursor:pointer;transition:all 150ms ease}#inspectorActionToolbar button:hover{background:var(--raised);border-color:var(--muted)}#inspectorActionToolbar button[aria-pressed="true"]{background:rgba(217,164,65,0.18)!important;border-color:var(--amber)!important;color:var(--amber)!important}#inspectorActionToolbar button:disabled,#inspectorActionToolbar button[aria-disabled="true"]{opacity:0.35;cursor:not-allowed;pointer-events:none}@media(max-width:640px){.file-row{min-height:44px;height:44px;font-size:14px}.file-browser-controls input,.file-sort,.impact-content,.impact-content h1{font-size:14px}.impact-content [class*=text-],.impact-context,#inspectorImpactCaption,.file-chip{font-size:12px!important}.impact-kpis label{font-size:12px}}
+    .file-browser-controls{padding:12px;display:grid;gap:12px}.file-browser-heading,.file-sort{display:flex;justify-content:space-between;font-size:13px}.file-browser-controls input{width:100%;background:transparent;border:1px solid var(--control);border-radius:6px;padding:6px;font-size:13px}.file-sort button{position:relative;padding-bottom:6px;color:var(--muted)}.file-row{display:flex;width:100%;height:32px;align-items:center;justify-content:space-between;padding:0 12px;border-left:1px solid transparent;font-size:13px;font-family:'Public Sans',Inter,system-ui,sans-serif;gap:12px}.file-row>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-row[aria-current=true]{background:var(--raised);border-left-color:var(--accent)}.file-impact{color:var(--muted);font-family:'JetBrains Mono',monospace}.file-impact.nonzero{color:var(--rose)}.folder-heading{font-size:13px;color:var(--muted);padding:10px 12px 4px}.impact-content{padding:16px;font-size:13px;line-height:1.6}.impact-content h2#inspectorFilePath,.impact-content h1{font:500 14px 'Public Sans',Inter,system-ui,sans-serif;overflow-wrap:anywhere}.impact-context,#inspectorImpactCaption{font-size:13px;color:var(--muted)}.impact-headline{font:400 30px 'Public Sans',Inter,system-ui,sans-serif;margin-top:18px}.impact-kpis{display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid var(--border);margin:16px 0;padding:12px 0;gap:8px}.impact-kpis span{display:block;font:400 16px 'JetBrains Mono',monospace}.impact-kpis label{display:block;color:var(--muted);font-size:12px}.impact-content section{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}.impact-content h2{font-size:13px;font-weight:500}.impact-content h2 span{float:right;color:var(--muted);font:12px 'JetBrains Mono',monospace}.impact-content pre{padding-right:4px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 'JetBrains Mono',monospace;overflow:auto;max-height:300px}.impact-content details{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}.file-chip{font:12px 'JetBrains Mono',monospace!important;color:var(--text)!important;background:transparent!important;border:0!important;border-bottom:1px solid var(--control)!important;border-radius:0!important;padding:0 2px!important;overflow-wrap:anywhere}.impact-content [class*=text-]{font-size:13px}.impact-content [class*=bg-]:not([data-badge]):not(#inspectorCycleBadge):not(#inspectorActionToolbar *){background:transparent!important}.impact-content [class*=text-cyan]:not([data-badge]):not(#inspectorActionToolbar *),.impact-content [class*=text-emerald]:not([data-badge]):not(#inspectorActionToolbar *),.impact-content [class*=text-indigo]:not([data-badge]):not(#inspectorActionToolbar *){color:var(--text)!important}.impact-content [class*=text-rose]{color:var(--rose)!important}.impact-content [class*=text-amber]{color:var(--amber)!important}#fileListContainer{padding:0!important;gap:0!important}.impact-content strong{font-weight:500}#inspectorOutboundCount:not(:empty){color:#38bdf8}#inspectorHop1Count:not(:empty){color:var(--rose)}#inspectorHop2Count:not(:empty){color:var(--amber)}.impact-content{font-weight:400!important}#inspectorActionToolbar button{background:var(--surface);border:1px solid var(--control);color:var(--text);min-height:30px;cursor:pointer;transition:background-color 150ms ease,border-color 150ms ease,color 150ms ease}#inspectorActionToolbar button:hover{background:var(--raised);border-color:var(--muted)}#inspectorActionToolbar button[aria-pressed="true"]{background:rgba(217,164,65,0.18)!important;border-color:var(--amber)!important;color:var(--amber)!important}#inspectorActionToolbar button:disabled,#inspectorActionToolbar button[aria-disabled="true"]{opacity:0.35;cursor:not-allowed;pointer-events:none}@media(max-width:640px){.file-row{min-height:44px;height:44px;font-size:14px}.file-browser-controls input,.file-sort,.impact-content,.impact-content h2#inspectorFilePath,.impact-content h1{font-size:14px}.impact-content [class*=text-],.impact-context,#inspectorImpactCaption,.file-chip{font-size:12px!important}.impact-kpis label{font-size:12px}}
 
     .file-sort button[aria-pressed=true]{color:var(--text)}.file-sort button[aria-pressed=true]:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--accent)}.impact-kpis span[data-zero=true]{color:var(--muted)!important}#panelInspectorContent #inspectorFilePath{font-weight:500!important}.impact-content .file-chip{font-weight:400!important}
-    .folder-heading{font-size:11px;color:var(--muted);padding:8px 12px;border-left:2px solid transparent;transition:background-color 150ms ease,border-color 150ms ease;}
+    .folder-heading{font-size:13px;color:var(--muted);padding:8px 12px;border-left:2px solid transparent;transition:background-color 150ms ease,border-color 150ms ease;}
     .folder-heading:hover{color:var(--text)}
     .folder-heading-focused{background:rgba(56,189,248,0.08)!important;border-left-color:#38bdf8!important;color:white!important;}
     .folder-title-btn{background:transparent;border:0;padding:4px 0;color:inherit;font:inherit;cursor:pointer;min-height:26px;display:flex;align-items:center;}
-    .folder-focus-pill{min-height:24px;border:1px solid transparent;line-height:1;transition:all 150ms ease;display:inline-flex;align-items:center;justify-content:center;}
+    .folder-focus-pill{min-height:24px;border:1px solid transparent;line-height:1;transition:background-color 150ms ease,border-color 150ms ease,color 150ms ease;display:inline-flex;align-items:center;justify-content:center;}
     .folder-focus-pill:hover{border-color:var(--muted);}
     .layer-filter-row{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:2px 0;}
-    .layer-pill{height:24px;display:inline-flex;align-items:center;justify-content:center;background:var(--ground);border:1px solid var(--control);border-radius:4px;padding:0 4px;color:var(--muted);font-size:11px;cursor:pointer;white-space:nowrap;transition:all 120ms ease;}
+    .layer-pill{height:24px;display:inline-flex;align-items:center;justify-content:center;background:var(--ground);border:1px solid var(--control);border-radius:4px;padding:0 4px;color:var(--muted);font-size:11px;cursor:pointer;white-space:nowrap;transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease;}
     .layer-pill:hover{color:var(--text);border-color:var(--muted);}
     .layer-pill[aria-pressed="true"],.layer-pill.active{background:var(--raised);color:white;border-color:var(--accent);}
     #activeLayerName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
     #clearLayerFilter{background:transparent;border:0;color:var(--accent);cursor:pointer;font-size:11px;padding:2px 4px;flex-shrink:0;}
     #clearLayerFilter:hover{text-decoration:underline;color:white;}
-  #shellOverlay:has(#commandPalette:not([hidden])){width:600px;border-radius:12px;padding:16px;} #commandPalette{display:flex;flex-direction:column;gap:12px;} .palette-modes{display:flex;gap:12px;} .palette-modes [aria-pressed="true"]{color:var(--text);border-bottom:1px solid var(--text);} #paletteInput{width:100%;padding:12px;background:var(--ground);border:1px solid var(--control);border-radius:6px;color:white;font-size:14px;} #paletteResults{max-height:55dvh;overflow:auto;} #paletteResults button{display:block;width:100%;text-align:left;padding:12px;font-size:14px;border-bottom:1px solid var(--rule);overflow-wrap:anywhere;} #paletteResults [data-filepath]{font-family:var(--mono);} #paletteResults [aria-selected="true"]{outline:1px solid var(--control);outline-offset:-1px;background:var(--raised);} #paletteResults [aria-disabled="true"]{color:var(--muted);} #paletteResults small{display:block;font-size:12px;color:var(--muted);margin-top:4px;} #paletteCount{font-size:12px;color:var(--muted);}
+  #shellOverlay:has(#commandPalette:not([hidden])){width:600px;border-radius:12px;padding:16px;} #commandPalette{display:flex;flex-direction:column;gap:12px;} .palette-modes{display:flex;gap:12px;} .palette-modes [aria-pressed="true"]{color:var(--text);border-bottom:1px solid var(--text);} #paletteInput{width:100%;padding:12px;background:var(--ground);border:1px solid var(--control);border-radius:6px;color:white;font-size:14px;} #paletteResults{max-height:55dvh;overflow:auto;} #paletteResults button{display:block;width:100%;text-align:left;padding:12px;font-size:14px;border-bottom:1px solid var(--rule);overflow-wrap:anywhere;} #paletteResults [data-filepath]{font-family:var(--mono);} /* taste-skill-ignore: filepaths are literal code */ #paletteResults [aria-selected="true"]{outline:1px solid var(--control);outline-offset:-1px;background:var(--raised);} #paletteResults [aria-disabled="true"]{color:var(--muted);} #paletteResults small{display:block;font-size:12px;color:var(--muted);margin-top:4px;} #paletteCount{font-size:12px;color:var(--muted);}
 
 .quiet-pane{padding:32px;overflow:auto;min-width:0}.pane-title{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:32px}.pane-title h1{font-size:26px;font-weight:600}.pane-title p,.form-dialog p{color:var(--muted);margin-top:8px}.pane-actions,.eval-controls{display:flex;align-items:center;gap:12px}.quiet-pane button,.form-dialog button,#panelAgentContent button{border:1px solid var(--control);border-radius:6px;padding:8px 12px;background:transparent;color:white}.quiet-pane .primary,.form-dialog .primary{background:white;color:var(--ground);border-color:white}.eval-controls{margin-bottom:24px}.eval-controls button[aria-pressed="true"]{border-color:white}.eval-controls span{color:var(--muted)}.eval-scores{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-bottom:32px}.eval-scores p{color:var(--muted)}.eval-scores small{font-size:12px;color:var(--muted)}.eval-scores div>div{font:400 36px 'JetBrains Mono',monospace;text-align:right;margin-top:12px;font-variant-numeric:tabular-nums}.eval-case{border-top:1px solid var(--border)}.eval-case summary{padding:16px 0;cursor:pointer;display:flex;justify-content:space-between;gap:24px}.case-metrics{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:12px;white-space:nowrap}.case-evidence{padding:0 0 24px;line-height:1.7}.case-evidence h3,.agent-run h3{color:var(--muted);font-weight:400;font-size:12px;margin:16px 0 8px}.trace-row{font:12px/1.7 'JetBrains Mono',monospace;border-bottom:1px solid var(--rule);padding:12px 0;overflow-wrap:anywhere}.trace-row p{color:var(--muted)}.eval-empty{color:var(--muted);padding:24px 0}.docs-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:24px}.docs-layout nav button{display:block;width:100%;text-align:left;border:0;border-radius:0;border-left:1px solid transparent;font-family:'JetBrains Mono',monospace}.docs-layout nav button[aria-current="true"]{border-left-color:var(--accent)}.docs-layout small{display:block;color:var(--muted);font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin-top:4px}.doc-editor{border:1px solid var(--border);border-radius:6px;overflow:hidden}.doc-editor header{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--border)}.doc-editor textarea{display:block;width:100%;height:520px;padding:16px;background:var(--surface);color:white;font:12px/1.7 'JetBrains Mono',monospace;border:0;resize:vertical}.form-dialog form{padding:24px;display:flex;flex-direction:column;gap:12px}.form-dialog header,.form-dialog footer{display:flex;align-items:center;gap:12px}.form-dialog header{justify-content:space-between}.form-dialog h2{font-size:18px;font-weight:500}.form-dialog footer{margin-top:12px;flex-wrap:wrap}.form-dialog footer span{flex:1}.form-dialog input,.form-dialog select,.form-dialog textarea,#agentQuestionInput{background:var(--ground);color:white;border:1px solid var(--control);border-radius:6px;padding:8px 12px;min-width:0;width:100%;font:13px 'JetBrains Mono',monospace}.form-dialog input,.form-dialog select{height:40px}.settings-fields{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;gap:12px}.quiet-toast{background:var(--surface);border:1px solid var(--control);border-radius:6px;padding:12px;font-size:13px;max-width:440px;white-space:pre-wrap;overflow-wrap:anywhere;transition:opacity 150ms}.quiet-toast[data-kind="warn"]{border-left-color:var(--amber)}#panelAgentContent{min-height:0;flex-direction:column}#panelAgentContent:not(.hidden){display:flex}#panelAgentContent>div:first-child{padding:16px;border-bottom:1px solid var(--border)}#panelAgentContent>div:first-child>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}#panelAgentContent .ask-scroll{flex:1;overflow:auto;padding:16px}#panelAgentContent p{color:var(--muted);line-height:1.7}#panelAgentContent form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border)}#agentQuestionInput{flex:1;min-height:40px}.agent-run{border-top:1px solid var(--border);padding:16px 0;overflow-wrap:anywhere}.agent-run header{display:flex;justify-content:space-between;gap:12px}.agent-run header span{color:var(--muted);font:12px 'JetBrains Mono',monospace}.agent-run strong{font-weight:500}.agent-answer{line-height:1.7}
 #agentPresetButtons button{border:0;border-radius:0;text-align:left}#agentPresetButtons button:hover{background:var(--raised);color:var(--text)}
@@ -119,9 +100,9 @@
     .docs-layout nav small{font-size:11px;}@media(max-width:640px){.docs-layout nav small{font-size:12px;}}
 @media(max-width:640px){.quiet-pane button,.impact-content summary{min-height:44px;min-width:44px;}.impact-content summary{display:flex;align-items:center;}}
 
-    :root{--mono:'JetBrains Mono',monospace}
+    :root{--mono:'JetBrains Mono',monospace} /* taste-skill-ignore: mono token */
     #canvasToolbar button[aria-pressed="true"]{color:var(--text)!important;border-bottom:1px solid var(--text)!important;background:var(--raised)!important}
-    .simulation-notice{display:flex;align-items:center;gap:10px;padding:8px 14px;border:1px solid var(--control);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;box-shadow:none;backdrop-filter:none}
+    .simulation-notice{display:flex;align-items:center;gap:10px;padding:8px 14px;border:1px solid var(--control);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;box-shadow:none;}
     .required-muted{color:var(--muted)}
     #inspectorExportsList{display:flex;flex-wrap:wrap;gap:8px;padding-top:12px}.export-symbol{font:11px var(--mono);overflow-wrap:anywhere}
     #inspectorSourceCode{box-sizing:border-box;width:100%;max-width:100%;padding:0 8px 0 0;overflow-x:hidden;overflow-y:auto;white-space:normal}
@@ -142,16 +123,16 @@
 
   <nav id="shellRail" aria-label="Main navigation"><span class="rail-mark" aria-hidden="true">⑂</span>
 <button id="navTabExplorer" title="Dependency Map" aria-label="Dependency Map" onclick="switchMainView('explorer')"><i data-lucide="git-fork"></i></button>
-<button id="navTabEvals" title="Agent Evals" aria-label="Agent Evals" onclick="switchMainView('evals')"><i data-lucide="shield-check"></i><span id="headerEvalScoreBadge" hidden></span></button>
+<button id="navTabEvals" hidden title="Agent Evals" aria-label="Agent Evals" onclick="switchMainView('evals')"><i data-lucide="shield-check"></i><span id="headerEvalScoreBadge" hidden></span></button>
 <button id="navTabSpecs" title="Docs & Rules" aria-label="Docs & Rules" onclick="switchMainView('specs')"><i data-lucide="file-code-2"></i></button>
 <button id="btnOpenSettings" class="rail-settings" title="Settings" aria-label="Settings" onclick="openSettingsModal()"><i data-lucide="settings"></i></button></nav>
-<header id="shellTopbar"><button id="navigationLauncher" class="compact-only" onclick="openUiOverlay('navigation', this)">Menu</button><h1 class="wordmark">Cartograph</h1><div id="repositorySlot"><select id="repoPresetSelect" onchange="handlePresetChange(this.value)" aria-label="Select Repository" class="bg-slate-900 border border-slate-700/80 hover:border-slate-600 text-slate-200 text-xs rounded-lg pl-2.5 pr-7 py-1.5 font-mono focus:outline-none focus:border-slate-500 transition-colors cursor-pointer">
+<header id="shellTopbar"><button id="navigationLauncher" class="compact-only" onclick="openUiOverlay('navigation', this)">Menu</button><h1 class="wordmark">Cartograph</h1><div id="repositorySlot"><select id="repoPresetSelect" onchange="handlePresetChange(this.value)" aria-label="Select Repository" class="bg-slate-900 border border-slate-700/80 hover:border-slate-600 text-slate-200 text-xs rounded-lg pl-2.5 pr-7 py-1.5 focus:outline-none focus:border-slate-500 transition-colors cursor-pointer">
           <option value="cartograph-saas">repo: cartograph-nextjs-saas (16 files)</option>
           <option value="fintech-ledger">repo: fintech-checkout-service (11 files)</option>
           <option value="python-agent">repo: python-rag-orchestrator (9 files)</option>
         </select></div><span id="repositoryFreshness" class="desktop-detail">Built-in sample</span><span class="topbar-spacer"></span><button id="commandsLauncher" onclick="openCommandPalette()">Commands <span class="desktop-detail">⌘K</span></button><button id="btnAddCustomFile" class="desktop-detail" onclick="openAddFileModal()">+ Add file</button><button class="desktop-detail" onclick="exportGraphSnapshot()">Export JSON</button><button id="btnOpenLocalFolder" class="desktop-detail primary" onclick="triggerFolderUpload()">Open Folder</button><span id="llmModeLabel" hidden>AST Walker (Local)</span><span id="llmStatusDot" hidden></span></header>
 <div id="compactMapTools"><button onclick="openUiOverlay('files', this)">Files</button><button onclick="openUiOverlay('inspector', this)">Inspector</button></div>
-<nav id="phonePaneTabs" aria-label="Map work region"><button data-pane="files" onclick="setPhonePane('files')">Files</button><button data-pane="map" onclick="setPhonePane('map')">Map</button><button data-pane="impact" onclick="setPhonePane('impact')">Impact</button><button data-pane="ask" onclick="setPhonePane('ask')">Ask</button></nav>
+<nav id="phonePaneTabs" aria-label="Map work region"><button data-pane="files" onclick="setPhonePane('files')">Files</button><button data-pane="map" onclick="setPhonePane('map')">Map</button><button data-pane="impact" onclick="setPhonePane('impact')">Inspector</button><button data-pane="ask" hidden onclick="setPhonePane('ask')">Ask</button></nav>
   <!-- ===================================================================== -->
   <!-- VIEW 1: DEPENDENCY MAP & CODEBASE INTELLIGENCE EXPLORER               -->
   <!-- ===================================================================== -->
@@ -165,13 +146,14 @@
         <button id="clearSearchBtn" class="hidden" onclick="clearFileSearch()">Clear search</button>
         <div id="layerFilterContainer" class="layer-filter-row">
           <button type="button" class="layer-pill active" data-layer="all" onclick="setLayerFilter('all')">All</button>
+          <button type="button" class="layer-pill" data-layer="entry" onclick="setLayerFilter('entry')">Entry</button>
           <button type="button" class="layer-pill" data-layer="core" onclick="setLayerFilter('core')">DB</button>
           <button type="button" class="layer-pill" data-layer="parser" onclick="setLayerFilter('parser')">Parser</button>
           <button type="button" class="layer-pill" data-layer="agent" onclick="setLayerFilter('agent')">Agent</button>
           <button type="button" class="layer-pill" data-layer="api" onclick="setLayerFilter('api')">Routes</button>
           <button type="button" class="layer-pill" data-layer="ui" onclick="setLayerFilter('ui')">UI</button>
         </div>
-        <div class="file-sort"><button id="sortBtnBlast" onclick="setFileSortMode('blast')">Blast radius</button><button id="sortBtnPath" onclick="setFileSortMode('path')">Folder tree</button></div>
+        <div class="file-sort"><button id="sortBtnBlast" onclick="setFileSortMode('blast')">Most connected</button><button id="sortBtnPath" onclick="setFileSortMode('path')">Folder tree</button></div>
       </div>
       <div id="fileListContainer" class="flex-1 overflow-y-auto divide-y divide-slate-800/40 p-1.5 space-y-0.5"></div>
     </aside>
@@ -179,7 +161,7 @@
     <!-- CENTER PANEL: Interactive Dependency Graph Canvas -->
     <section id="mapRegion" class="flex-1 flex flex-col relative bg-slate-950 min-h-[380px] lg:min-h-0 overflow-hidden">
 
-      <div id="canvasToolbar"><button onclick="resetGraphView()">Fit</button><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button id="btnToggleLayout" onclick="cycleGraphLayout()" title="Cycle layout (Pipeline LR / Tree TB / Cluster)" aria-label="Cycle layout mode (Pipeline LR, Tree TB, Cluster)" aria-live="polite">Pipeline</button><button id="btnToggleIsolate" aria-pressed="false" onclick="toggleIsolateBlastRadius()">Isolate</button><button id="btnSimulateBreak" aria-pressed="false" onclick="toggleBreakSimulation()">Simulate</button><button id="toggleInspectorBtn" onclick="toggleInspector()">Hide inspector</button><button id="layoutBtnDag" hidden></button><button id="layoutBtnForce" hidden></button></div>
+      <div id="canvasToolbar"><button onclick="resetGraphView()">Fit</button><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button id="btnToggleLayout" onclick="cycleGraphLayout()" title="Cycle layout (Pipeline LR / Tree TB / Cluster)" aria-label="Cycle layout mode (Pipeline LR, Tree TB, Cluster)" aria-live="polite">Pipeline</button><button id="btnToggleIsolate" aria-pressed="false" onclick="toggleIsolateBlastRadius()">Isolate</button><button id="btnSimulateBreak" hidden aria-pressed="false" onclick="toggleBreakSimulation()">Simulate</button><button id="toggleInspectorBtn" onclick="toggleInspector()">Hide inspector</button><button id="layoutBtnDag" hidden></button><button id="layoutBtnForce" hidden></button></div>
       <div id="canvasAlertBanner" class="hidden absolute top-16 left-3 right-3 z-20 pointer-events-none flex justify-center">
         <div id="canvasAlertContent" class="simulation-notice pointer-events-auto">
           <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 shrink-0"></i>
@@ -197,50 +179,50 @@
 
     </section>
 
-    <!-- RIGHT PANEL: Module Inspector / Blast Radius & Graph-Walking Agent -->
+    <!-- RIGHT PANEL: Module Inspector & Causal Dependency Flow -->
     <aside id="inspectorRegion" class="w-full lg:w-[430px] xl:w-[460px] border-t lg:border-t-0 lg:border-l border-slate-800/90 bg-slate-925/95 flex flex-col shrink-0 max-h-[540px] lg:max-h-none">
 
-      <div class="flex border-b border-slate-800 bg-slate-900/70 p-1 gap-1 shrink-0">
-        <button id="rightTabInspector" type="button" onclick="switchRightPanelTab('inspector')" class="flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all bg-slate-800 text-white shadow-sm border border-slate-700/70">
-          <i data-lucide="radar" class="w-3.5 h-3.5 text-rose-400"></i>
-          <span>Impact</span>
-        </button>
-        <button id="rightTabAgent" type="button" onclick="switchRightPanelTab('agent')" class="flex-1 py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-slate-400 hover:text-slate-200">
-          <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span>Ask · Trace</span>
-          <span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300">Agent</span>
-        </button>
+      <div class="flex items-center justify-between border-b border-slate-800 bg-slate-900/70 px-5 py-2.5 shrink-0">
+        <div class="flex items-center gap-2">
+          <i data-lucide="layers" class="w-4 h-4 text-sky-400"></i>
+          <span class="text-xs font-semibold text-slate-200">Module Inspector</span>
+        </div>
+        <span class="text-[11px] text-slate-400">Causal Flow</span>
+        <div id="inspectorTabSwitcher" hidden class="hidden">
+          <button id="rightTabInspector" type="button" onclick="switchRightPanelTab('inspector')"></button>
+          <button id="rightTabAgent" type="button" onclick="switchRightPanelTab('agent')"></button>
+        </div>
       </div>
 
-      <!-- RIGHT TAB 1: MODULE INSPECTOR & BLAST RADIUS -->
+      <!-- RIGHT TAB 1: MODULE INSPECTOR & CAUSAL FLOW -->
       <div id="panelInspectorContent" class="impact-content flex-1 overflow-y-auto">
-        <h1 id="inspectorFilePath"></h1>
+        <h2 id="inspectorFilePath"></h2>
         <div id="inspectorMetaContext" class="impact-context hidden"><span id="inspectorLayerBadge"></span> · <span id="inspectorLocBadge"></span><span id="inspectorCycleBadge" class="hidden"></span></div>
         <div id="inspectorActionToolbar" class="grid grid-cols-2 gap-1.5 my-3 pt-2 border-t border-slate-800/80">
-          <button type="button" id="btnInspectorAsk" onclick="askAgentAboutSelectedFile()" disabled class="text-xs px-2.5 py-1.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 flex items-center justify-center gap-1.5 font-mono cursor-pointer transition-colors" title="Ask the agent about this module's impact">
+          <button type="button" id="btnInspectorAsk" hidden onclick="askAgentAboutSelectedFile()" disabled class="hidden text-xs px-2.5 py-1.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer transition-colors" title="Ask the agent about this module">
             <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
             <span>Ask Agent</span>
           </button>
-          <button type="button" id="btnInspectorCenter" onclick="centerSelectedOnMap()" disabled class="text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 font-mono cursor-pointer transition-colors" title="Center camera on this card">
+          <button type="button" id="btnInspectorCenter" onclick="centerSelectedOnMap()" disabled class="text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition-colors" title="Center camera on this card">
             <i data-lucide="crosshair" class="w-3.5 h-3.5 text-sky-400"></i>
             <span>Center Map</span>
           </button>
-          <button type="button" id="btnInspectorSimulate" onclick="toggleSimulateSelected()" disabled aria-pressed="false" class="text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 font-mono cursor-pointer transition-colors" title="Simulate breaking this module's contract">
+          <button type="button" id="btnInspectorSimulate" hidden onclick="toggleSimulateSelected()" disabled aria-pressed="false" class="hidden text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition-colors" title="Simulate breaking this module's contract">
             <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-400"></i>
             <span>Simulate Break</span>
           </button>
-          <button type="button" id="btnInspectorCopyPath" onclick="copySelectedFilePath()" disabled class="text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 font-mono cursor-pointer transition-colors" title="Copy file path">
+          <button type="button" id="btnInspectorCopyPath" onclick="copySelectedFilePath()" disabled class="text-xs px-2.5 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition-colors" title="Copy file path">
             <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-400"></i>
             <span>Copy Path</span>
           </button>
         </div>
         <div id="inspectorImpactPercent" class="impact-headline"></div><p id="inspectorImpactCaption"></p>
-        <div class="impact-kpis"><div><span id="inspectorHop1Count"></span><label>Direct breaks</label></div><div><span id="inspectorHop2Count"></span><label>2-hop cascade</label></div><div><span id="inspectorOutboundCount"></span><label>Outbound imports</label></div></div>
+        <div class="impact-kpis"><div><span id="inspectorOutboundCount"></span><label>Depends on</label></div><div><span id="inspectorHop1Count"></span><label>Direct callers</label></div><div><span id="inspectorHop2Count"></span><label>Downstream</label></div></div>
         <div id="inspectorExplanationText"></div>
         <details><summary>All exports</summary><div id="inspectorExportsList"></div></details>
-        <section><h2>Breaks at 1 hop <span id="hop1HeaderBadge"></span></h2><div id="hop1ListContainer"></div></section>
-        <section><h2>Cascades at 2 hops <span id="hop2HeaderBadge"></span></h2><div id="hop2ListContainer"></div></section>
-        <section><h2>Outbound imports <span id="outboundHeaderBadge"></span></h2><div id="outboundListContainer"></div></section>
+        <section><h2>Called by (Direct callers) <span id="hop1HeaderBadge"></span></h2><div id="hop1ListContainer"></div></section>
+        <section><h2>Downstream dependents (Transitive) <span id="hop2HeaderBadge"></span></h2><div id="hop2ListContainer"></div></section>
+        <section><h2>Depends on (Imports) <span id="outboundHeaderBadge"></span></h2><div id="outboundListContainer"></div></section>
         <details><summary>Source</summary><button onclick="copySelectedSource()">Copy</button><pre id="inspectorSourceCode"></pre></details>
       </div>
 
@@ -300,7 +282,7 @@
       </div>
     </header>
     <div class="eval-controls"><button id="evalModeStrictBtn" onclick="setEvalPromptMode('strict')">Strict</button><button id="evalModeNaiveBtn" onclick="setEvalPromptMode('naive')">Naive</button><span id="evalActiveModeTag">Not run</span></div>
-    <div class="eval-scores"><div><p>Citation groundedness</p><div id="evalScoreGroundedness">—</div></div><div><p>Blast-radius recall</p><div id="evalScoreRecall">—</div></div><div><p>Hallucinated paths</p><div id="evalScoreHallucinations">—</div></div><div><p>Average tool steps</p><div id="evalScoreLatency">—</div></div></div>
+    <div class="eval-scores"><div><p>Citation groundedness</p><div id="evalScoreGroundedness">-</div></div><div><p>Blast-radius recall</p><div id="evalScoreRecall">-</div></div><div><p>Hallucinated paths</p><div id="evalScoreHallucinations">-</div></div><div><p>Average tool steps</p><div id="evalScoreLatency">-</div></div></div>
     <div id="evalCasesContainer"></div>
   </section>
   <section id="viewSpecs" class="hidden quiet-pane">
@@ -310,15 +292,24 @@
 
   <span id="intakeStatus" class="sr-only" aria-live="polite"></span>
 <details id="intakeReport" hidden><summary id="intakeSummary">Last intake</summary><div class="intake-body"><p id="intakeReasons"></p><ul id="intakeSkippedList"></ul><p id="intakeOmitted"></p></div></details>
-<footer id="shellStatus"><span><span id="metricTotalFiles">0</span> files · <span id="metricTotalEdges">0</span> edges · <button id="metricCycleBadge" onclick="handleCycleBadgeClick()">0 cycles</button><span class="status-hotspot"> · hotspot <button id="metricTopHotspotBtn" onclick="selectTopHotspot()">—</button></span></span><span class="status-zoom"><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><span id="shellZoom">100%</span><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button onclick="resetGraphView()">Fit</button></span></footer>
+<footer id="shellStatus"><span><span id="metricTotalFiles">0</span> files · <span id="metricTotalEdges">0</span> edges · <button id="metricCycleBadge" onclick="handleCycleBadgeClick()">0 cycles</button><span class="status-hotspot"> · hotspot <button id="metricTopHotspotBtn" onclick="selectTopHotspot()">-</button></span></span><span class="status-zoom"><button aria-label="Zoom out" onclick="zoomGraph(0.83)">−</button><span id="shellZoom">100%</span><button aria-label="Zoom in" onclick="zoomGraph(1.2)">+</button><button onclick="resetGraphView()">Fit</button></span></footer>
 <section id="commandPalette" hidden><div class="palette-modes" aria-label="Search mode"><button data-palette-mode="commands" onclick="setPaletteMode('commands')">Commands</button><button data-palette-mode="files" onclick="setPaletteMode('files')">Files</button></div><input id="paletteInput" role="combobox" aria-autocomplete="list" aria-controls="paletteResults" aria-expanded="true" autocomplete="off" placeholder="Search commands and files…" oninput="state.ui.paletteQuery=this.value;state.ui.paletteActiveIndex=-1;renderCommandPalette()" onkeydown="handlePaletteKeydown(event)"><div id="paletteResults" role="listbox" aria-label="Search results"></div><p id="paletteCount" role="status" aria-live="polite"></p></section>
 <dialog id="shellOverlay" aria-labelledby="shellOverlayTitle"><div class="sheet-heading"><h2 id="shellOverlayTitle">Navigation</h2><button aria-label="Close" onclick="closeUiOverlay()">Close</button></div><div id="shellOverlayBody"></div></dialog>
-<div id="navigationContent" hidden><div id="navigationRepositorySlot"></div><button data-view="explorer" onclick="switchMainView('explorer')">Dependency Map</button><button data-view="evals" onclick="switchMainView('evals')">Agent Evals</button><button data-view="specs" onclick="switchMainView('specs')">Docs &amp; Rules</button><button onclick="triggerFolderUpload()">Open Folder</button><button onclick="openAddFileModal()">+ Add file</button><button onclick="exportGraphSnapshot()">Export JSON</button><button onclick="openSettingsModal()">Settings</button></div>
+<div id="navigationContent" hidden><div id="navigationRepositorySlot"></div><button data-view="explorer" onclick="switchMainView('explorer')">Dependency Map</button><button data-view="evals" hidden onclick="switchMainView('evals')">Agent Evals</button><button data-view="specs" onclick="switchMainView('specs')">Docs &amp; Rules</button><button onclick="triggerFolderUpload()">Open Folder</button><button onclick="openAddFileModal()">+ Add file</button><button onclick="exportGraphSnapshot()">Export JSON</button><button onclick="openSettingsModal()">Settings</button></div>
   <!-- ===================================================================== -->
   <!-- MODAL 1: ADD / PASTE CUSTOM SOURCE FILE                               -->
   <!-- ===================================================================== -->
   <dialog id="modalAddFile" aria-labelledby="addFileTitle" class="form-dialog"><form onsubmit="event.preventDefault();submitCustomFile()"><header><h2 id="addFileTitle">Add file</h2><button type="button" onclick="closeAddFileModal()" aria-label="Close add file">Close</button></header><p>Paste source code or select files to parse their imports and exports.</p><label for="customFilePathInput">Relative file path</label><input id="customFilePathInput" required value="src/services/billing-webhook.ts"><label for="customFileCodeInput">Source code</label><textarea id="customFileCodeInput" rows="9" spellcheck="false">export function example() {}</textarea><footer><button type="button" onclick="triggerMultipleFilesUpload()">Select multiple files</button><span></span><button type="button" onclick="closeAddFileModal()">Cancel</button><button class="primary" type="submit">Parse and add</button></footer></form></dialog>
   <dialog id="modalSettings" aria-labelledby="settingsTitle" class="form-dialog"><form onsubmit="event.preventDefault();saveAgentSettings()"><header><h2 id="settingsTitle">Agent settings</h2><button type="button" onclick="closeSettingsModal()" aria-label="Close settings">Close</button></header><p>The parser and tool trace run locally; optional models synthesize only verified evidence.</p><div class="settings-fields"><label for="settingsEngineSelect">Engine</label><select id="settingsEngineSelect" onchange="handleEngineSelectChange(this.value)"><option value="deterministic">Deterministic graph walker</option><option value="ollama">Local Ollama</option><option value="openai">OpenAI-compatible endpoint</option></select><label for="settingsEndpointInput">Endpoint URL</label><input id="settingsEndpointInput" type="url"><label for="settingsModelInput">Model</label><input id="settingsModelInput"><label for="settingsApiKeyInput">API key (optional)</label><input id="settingsApiKeyInput" type="password" autocomplete="off"></div><footer><span></span><button type="button" onclick="closeSettingsModal()">Cancel</button><button class="primary" type="submit">Save</button></footer></form></dialog>
+  <dialog id="modalCycleFixer" aria-labelledby="cycleFixerTitle" class="form-dialog max-w-xl">
+    <header class="sheet-heading">
+      <h2 id="cycleFixerTitle" class="text-base font-semibold text-rose-300 flex items-center gap-2">
+        <i data-lucide="refresh-cw" class="w-4 h-4 text-rose-400"></i> Circular Dependency Guide
+      </h2>
+      <button type="button" onclick="closeCycleFixerModal()" aria-label="Close cycle fixer">Close</button>
+    </header>
+    <div id="cycleFixerContent" class="p-4 space-y-4 text-sm text-slate-300 overflow-y-auto max-h-[70vh]"></div>
+  </dialog>
 
   <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 

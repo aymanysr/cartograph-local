@@ -1,20 +1,16 @@
 {
  "version": 1,
  "kind": "app",
- "at": "2026-10-27T21:40:13.526Z",
- "seed": 1049632490,
+ "at": "2026-10-30T04:20:07.199Z",
+ "seed": 1216047844,
  "input": {
-  "kind": "builder",
-  "brief": "Cartograph — local codebase intelligence: dependency graph canvas, file browser, blast-radius inspector",
-  "theme": "dark",
+  "kind": "devtools",
+  "brief": "AST Codebase Intelligence & Impact Graph",
+  "theme": null,
   "screens": [
-   "builder",
-   "detail",
-   "settings"
+   "overview"
   ],
-  "keep": [
-   "type"
-  ],
+  "keep": [],
   "style": "data-terminal"
  },
  "style": {
@@ -135,60 +131,17 @@
  },
  "screens": [
   {
-   "name": "builder",
+   "name": "overview",
    "pattern": {
-    "id": "builder-canvas",
-    "name": "Builder canvas",
-    "screen": "builder",
+    "id": "deploy-health-lead",
+    "name": "Current deploy and health lead",
+    "screen": "overview",
     "kinds": [
-     "builder"
+     "devtools"
     ],
-    "basis": "a flow builder in analytics mode",
-    "blueprint": "No global navigation: a 44px top bar on the window ground with no rule (an exit arrow, the object's name at 16/600 with a status pill, and on the right 16px icon buttons on a 40px pitch, a secondary and a near-black primary, split by 1px dividers). Below, two panels on the ground with 8px outer margins and a 12px gap, both with a 1px border, 16px radius and no shadow: a 232px palette (16px padding, groups under 14px labels, items on a 40px pitch with a small type tile, a label and a drag grip) and the canvas, a flat well one step darker than the ground (#f4f6f8 on #f9fbfc) with no dot grid. Nodes share one width (338px in the study), 12px radius, a 1px hairline, padding 16 on top and 12 at the sides, a type tile and a 16/600 title, and their metrics in a well as key-value rows on a 32px pitch with right-aligned tabular or mono values ('0% (0)'). Nodes stack on one spine 64px apart with a 38px round insert button centred in each gap; connectors are 1px orthogonal lines with 6px rounded elbows. Overlays (date range, zoom, minimap) are small white controls pinned 16px inside the canvas corners. Canvas content is one size larger than the chrome (16 against 14). Node-type tiles may be tinted, one pastel per type, the same in the palette and on the canvas: pass --allow icon-chips to the inspector and say why.",
-    "phone": "Editing a graph on a phone is rarely the job: show the flow read-only as a vertical list of nodes with their metrics, and the palette as a bottom sheet if editing is kept."
-   }
-  },
-  {
-   "name": "detail",
-   "pattern": {
-    "id": "tabbed-object-detail",
-    "name": "Tabbed object detail in a sheet",
-    "screen": "detail",
-    "kinds": [
-     "analytics",
-     "smb-admin",
-     "builder",
-     "support"
-    ],
-    "basis": "a list's engagement tab; a reports dashboard",
-    "blueprint": "Inside the sheet: a breadcrumb row at 16/600 (the parent in grey, the current page as the h1, a 24px grey type chip after it) with its actions on the right (a text button and an outlined 32px dropdown). Under it, the object's tabs at 14px with a 2px ink underline that runs 8px past the label, on a 1px rule that spans the sheet. 30px below, the filter row: a label above a 300x32 select on the left; the freshness stamp ('Last updated July 21, 2026') and a 40px refresh button on the right, centred on the select's line. Then 3 KPI cards (value 36/400, its label at 16/600 under it, the period in words) and 2 chart cards, all on one 24px gutter so the rows share column lines. Do not stretch a short card to its neighbour's height (it left 250px of dead white) and do not list legend series that have no data.",
-    "phone": "Breadcrumb shortens to a back link and the h1; tabs scroll; KPI cards stack as label-value rows; charts full width."
-   }
-  },
-  {
-   "name": "settings",
-   "pattern": {
-    "id": "settings-two-column",
-    "name": "Settings in two columns",
-    "screen": "settings",
-    "kinds": [
-     "devtools",
-     "smb-admin",
-     "support",
-     "workspace",
-     "commerce",
-     "analytics",
-     "finance",
-     "wallet",
-     "creator",
-     "community",
-     "builder",
-     "markets",
-     "report"
-    ],
-    "basis": "one settings page; stacking from a narrow rail card. The basis is thin.",
-    "blueprint": "A centred column of about 1152px. Each section is one row: a label column of about 450px (16/500 title, 14px grey description; the title's cap top 6-8px below the panel top, level with the panel's first line) beside a panel of about 700px with a #fafafa fill, 16px radius, 16px padding, no border and no shadow. Sections are split by a full-width 1px rule with 32px above and below. Inside a panel: field labels 14/500 above 40px white inputs (1px #e8e8e8, radius 10), 8px from label to field, 16px between fields, 24px from the description to the first label, 16px to the Save button; switch rows with a 14/500 title, a 20px status badge 8px after it, a 14px grey description and a 28x16 toggle 16px from the right edge, centred on the title line. A plan-gated feature shows a 48px tinted strip with a 32px button directly above its panel, and the panel stays readable. When a panel runs much taller than its label, put the section's help or a summary of the current values in the label column rather than 250px of nothing.",
-    "phone": "Each section stacks: title and description, then the panel at full width. Inside, label, 8-10px, field, 16-26px to the next pair; toggles stay on the right of their title."
+    "basis": "house pattern from testing: built after a flat 24-hour chart filled a whole first screen and lost to a richer layout",
+    "blueprint": "Title row: the project's name as the h1 with a status pill (Healthy, Degraded) and a breadcrumb of team and product above it; repository, branch and a freshness stamp in a 14px grey line under it; the one primary action (Redeploy, or View logs when the latest deploy failed) on the right. Then a full-width card for what is live now: the production deployment's commit message at 16/600, its branch, short SHA in mono, author and age on the left, and three or four facts in divided cells on the right (domain, live since, build time, regions). Then the health strip: three or four KPIs in one divided container, each with its change in words and in the polarity colour when it moved the wrong way. Then a two-column row: the 24-hour chart at two-thirds (deploy markers as 1px ticks with their short SHA, the budget or SLO as a dashed reference line) and, at one-third, the block that explains the worst number (the spike and what reverted it, the status codes behind the error rate). Then the deployments table capped at 6 rows, a failed row carrying its failing step and a View logs action, a building row its elapsed time.",
+    "phone": "The live deployment card becomes a stack of label-value rows; the KPIs a 2x2 grid; the chart full width with its markers; the explanation under it; deployments as two-line rows with region and duration on line 2."
    }
   }
  ]
